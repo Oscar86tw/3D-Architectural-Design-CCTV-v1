@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-const APP_VERSION = 'V1.19';
+const APP_VERSION = 'V1.20';
 const DEFAULT_COMMUNITY_ID = 'hualong-chao-plus';
-const CATALOG_KEY = 'cctv3d-site-catalog-v1-19';
-const WORKING_KEY = 'cctv3d-working-v1-19';
-const STORE_KEY = 'cctv3d-project-store-v1-19';
-const PREV_STORE_KEYS = ['cctv3d-project-store-v1-18','cctv3d-project-store-v1-17','cctv3d-project-store-v1-16','cctv3d-project-store-v1-15','cctv3d-project-store-v1-14','cctv3d-project-store-v1-13','cctv3d-project-store-v1-12','cctv3d-project-store-v1-11','cctv3d-project-store-v1-10','cctv3d-project-store-v1-9','cctv3d-project-store-v1-8','cctv3d-project-store-v1-7','cctv3d-project-store-v1-6'];
+const CATALOG_KEY = 'cctv3d-site-catalog-v1-20';
+const WORKING_KEY = 'cctv3d-working-v1-20';
+const STORE_KEY = 'cctv3d-project-store-v1-20';
+const PREV_STORE_KEYS = ['cctv3d-project-store-v1-19','cctv3d-project-store-v1-18','cctv3d-project-store-v1-17','cctv3d-project-store-v1-16','cctv3d-project-store-v1-15','cctv3d-project-store-v1-14','cctv3d-project-store-v1-13','cctv3d-project-store-v1-12','cctv3d-project-store-v1-11','cctv3d-project-store-v1-10','cctv3d-project-store-v1-9','cctv3d-project-store-v1-8','cctv3d-project-store-v1-7','cctv3d-project-store-v1-6'];
 const GOOGLE_DRIVE_PROJECT_URL = 'https://drive.google.com/drive/folders/1FWduBvqlTmr1oTipmqR3sywO2VUCFq9i?usp=drive_link';
 const GOOGLE_SHEET_PROJECT_URL = 'https://docs.google.com/spreadsheets/d/1-jy-MWBXMyx92xZ-RTnwqpB-j7cMnlOIB2i1lh2eUZg/edit?usp=sharing';
 const GOOGLE_SHEET_ID = '1-jy-MWBXMyx92xZ-RTnwqpB-j7cMnlOIB2i1lh2eUZg';
@@ -41,9 +41,41 @@ const els = {
   projectFolder:$('projectFolder'), projectName:$('projectName'), projectList:$('projectList'), savedCount:$('savedCount'),
   communitySelect:$('communitySelect'), floorSelect:$('floorSelect'), floorPlanInfo:$('floorPlanInfo'),
   scaleBadge:$('scaleBadge'), calibrationMeters:$('calibrationMeters'), calibrationWorld:$('calibrationWorld'), calibrationStatus:$('calibrationStatus'),
-  cloudStatusBadge:$('cloudStatusBadge'), apiStatusText:$('apiStatusText')
+  cloudStatusBadge:$('cloudStatusBadge'), apiStatusText:$('apiStatusText'),
+  systemModal:$('systemModal'), systemModalTitle:$('systemModalTitle'), systemModalEyebrow:$('systemModalEyebrow'), systemModalBody:$('systemModalBody'), systemModalClose:$('systemModalClose'), systemModalOk:$('systemModalOk'), systemModalCopy:$('systemModalCopy')
 };
 const floorTabsNav = document.querySelector('.floor-tabs');
+
+
+let lastErrorText = '';
+const startupFlow = {
+  local:{name:'本機資料',status:'waiting',detail:'等待載入…'},
+  plan:{name:'樓層圖面',status:'waiting',detail:'等待載入…'},
+  api:{name:'工作表1!B1 API',status:'waiting',detail:'等待讀取…'},
+  ping:{name:'Apps Script 連線',status:'waiting',detail:'等待測試…'},
+  cloud:{name:'雲端專案清單',status:'waiting',detail:'等待讀取…'}
+};
+function modalIcon(status){return status==='done'?'✓':status==='error'?'✕':status==='loading'?'●':'○';}
+function renderStartupModal(){
+  const rows=Object.values(startupFlow).map(s=>`<div class="flow-row ${s.status}"><div class="flow-icon">${modalIcon(s.status)}</div><div class="flow-name">${esc(s.name)}</div><div class="flow-detail">${esc(s.detail)}</div></div>`).join('');
+  els.systemModalEyebrow.textContent='STARTUP FLOW';els.systemModalTitle.textContent='系統啟動與資料載入';
+  els.systemModalBody.innerHTML=`<p class="startup-summary">網站正在確認目前專案資料與雲端連線狀態。每個步驟都會在這裡顯示結果。</p><div class="flow-list">${rows}</div>`;
+  els.systemModal.querySelector('.system-modal-card')?.classList.remove('error');els.systemModalCopy.classList.add('hidden');els.systemModalOk.textContent='關閉';els.systemModal.classList.remove('hidden');
+}
+function setStartupStep(key,status,detail){if(!startupFlow[key])return;startupFlow[key].status=status;startupFlow[key].detail=detail||'';renderStartupModal();}
+function closeSystemModal(){els.systemModal.classList.add('hidden');}
+function showErrorModal(title,error,context=''){
+  const message=error instanceof Error?error.message:String(error||'未知錯誤');
+  const stack=error instanceof Error&&error.stack?error.stack:'';
+  lastErrorText=`${title}\n${message}${context?`\n\n位置：${context}`:''}${stack?`\n\n${stack}`:''}`;
+  els.systemModalEyebrow.textContent='ERROR';els.systemModalTitle.textContent=title||'系統錯誤';
+  els.systemModalBody.innerHTML=`<div class="error-box"><div class="error-title">發生錯誤</div><div class="error-message">${esc(message)}</div>${context?`<div class="error-meta">位置：${esc(context)}</div>`:''}</div>`;
+  els.systemModal.querySelector('.system-modal-card')?.classList.add('error');els.systemModalCopy.classList.remove('hidden');els.systemModalOk.textContent='確定';els.systemModal.classList.remove('hidden');
+}
+els.systemModalClose.onclick=closeSystemModal;els.systemModalOk.onclick=closeSystemModal;els.systemModal.onclick=e=>{if(e.target===els.systemModal)closeSystemModal();};
+els.systemModalCopy.onclick=async()=>{try{await navigator.clipboard.writeText(lastErrorText);els.systemModalCopy.textContent='已複製';setTimeout(()=>els.systemModalCopy.textContent='複製錯誤資訊',1200);}catch{prompt('請複製錯誤資訊：',lastErrorText);}};
+window.addEventListener('error',e=>{showErrorModal('網頁執行錯誤',e.error||e.message,`${e.filename||'未知檔案'}:${e.lineno||0}:${e.colno||0}`);});
+window.addEventListener('unhandledrejection',e=>{showErrorModal('未處理的系統錯誤',e.reason||'Promise 執行失敗','非同步處理');});
 
 const camInputs = {
   name:$('camName'), lens:$('camLens'), lensFov:$('camLensFov'), color:$('camColor'), colorLabel:$('camColorLabel'), fixed:$('camFixed'),
@@ -77,7 +109,7 @@ function defaultCatalog(){
 }
 function loadCatalog(){
   try{
-    const parsed = JSON.parse(localStorage.getItem(CATALOG_KEY) || localStorage.getItem('cctv3d-site-catalog-v1-18') || localStorage.getItem('cctv3d-site-catalog-v1-17') || localStorage.getItem('cctv3d-site-catalog-v1-16') || localStorage.getItem('cctv3d-site-catalog-v1-15') || localStorage.getItem('cctv3d-site-catalog-v1-14') || localStorage.getItem('cctv3d-site-catalog-v1-13') || localStorage.getItem('cctv3d-site-catalog-v1-12') || localStorage.getItem('cctv3d-site-catalog-v1-11') || localStorage.getItem('cctv3d-site-catalog-v1-10') || localStorage.getItem('cctv3d-site-catalog-v1-9') || 'null');
+    const parsed = JSON.parse(localStorage.getItem(CATALOG_KEY) || localStorage.getItem('cctv3d-site-catalog-v1-19') || localStorage.getItem('cctv3d-site-catalog-v1-18') || localStorage.getItem('cctv3d-site-catalog-v1-17') || localStorage.getItem('cctv3d-site-catalog-v1-16') || localStorage.getItem('cctv3d-site-catalog-v1-15') || localStorage.getItem('cctv3d-site-catalog-v1-14') || localStorage.getItem('cctv3d-site-catalog-v1-13') || localStorage.getItem('cctv3d-site-catalog-v1-12') || localStorage.getItem('cctv3d-site-catalog-v1-11') || localStorage.getItem('cctv3d-site-catalog-v1-10') || localStorage.getItem('cctv3d-site-catalog-v1-9') || 'null');
     if(parsed?.communities?.length) return parsed;
   }catch{}
   const d = defaultCatalog(); localStorage.setItem(CATALOG_KEY, JSON.stringify(d)); return d;
@@ -109,7 +141,7 @@ function migrateFlatData(raw){
 function loadWorking(){
   const base = { communityId:DEFAULT_COMMUNITY_ID, floor:'B1', showPlan:true, listFilter:'camera', cameras:{}, modules:{}, calibrations:{}, selected:{kind:'camera',id:null} };
   try{
-    const raw = JSON.parse(localStorage.getItem(WORKING_KEY) || localStorage.getItem('cctv3d-working-v1-18') || localStorage.getItem('cctv3d-working-v1-17') || localStorage.getItem('cctv3d-working-v1-16') || localStorage.getItem('cctv3d-working-v1-15') || localStorage.getItem('cctv3d-working-v1-14') || localStorage.getItem('cctv3d-working-v1-13') || localStorage.getItem('cctv3d-working-v1-12') || localStorage.getItem('cctv3d-working-v1-11') || localStorage.getItem('cctv3d-working-v1-10') || localStorage.getItem('cctv3d-working-v1-9') || 'null');
+    const raw = JSON.parse(localStorage.getItem(WORKING_KEY) || localStorage.getItem('cctv3d-working-v1-19') || localStorage.getItem('cctv3d-working-v1-18') || localStorage.getItem('cctv3d-working-v1-17') || localStorage.getItem('cctv3d-working-v1-16') || localStorage.getItem('cctv3d-working-v1-15') || localStorage.getItem('cctv3d-working-v1-14') || localStorage.getItem('cctv3d-working-v1-13') || localStorage.getItem('cctv3d-working-v1-12') || localStorage.getItem('cctv3d-working-v1-11') || localStorage.getItem('cctv3d-working-v1-10') || localStorage.getItem('cctv3d-working-v1-9') || 'null');
     if(raw) return { ...base, ...raw, cameras:migrateFlatData(raw.cameras), modules:migrateFlatData(raw.modules), calibrations:raw.calibrations || {} };
     const prev = JSON.parse(localStorage.getItem('cctv3d-working-v1-8') || localStorage.getItem('cctv3d-working-v1-7') || 'null');
     if(prev){
@@ -151,7 +183,8 @@ function getTextureSource(meta){ return meta?.texture || ''; }
 function buildFloor(){
   clearGroup(floorRoot); const meta=currentFloorMeta(); if(!meta) return;
   const {width,depth}=floorWorldSize();
-  const tex=textureLoader.load(getTextureSource(meta),()=>renderer.render(scene,camera)); tex.colorSpace=THREE.SRGBColorSpace; tex.anisotropy=renderer.capabilities.getMaxAnisotropy();
+  setStartupStep('plan','loading',`正在載入：${meta.name||meta.id||'樓層圖面'}`);
+  const tex=textureLoader.load(getTextureSource(meta),()=>{renderer.render(scene,camera);setStartupStep('plan','done',`${meta.name||meta.id||'圖面'} 載入完成`);},undefined,(err)=>{setStartupStep('plan','error',`${meta.name||meta.id||'圖面'} 載入失敗`);showErrorModal('樓層圖面載入失敗',err||'無法讀取圖面',getTextureSource(meta));}); tex.colorSpace=THREE.SRGBColorSpace; tex.anisotropy=renderer.capabilities.getMaxAnisotropy();
   floorPlane=new THREE.Mesh(new THREE.PlaneGeometry(width,depth),new THREE.MeshStandardMaterial({map:tex,roughness:.92,metalness:0,transparent:true,opacity:state.showPlan?1:.12})); floorPlane.rotation.x=-Math.PI/2; floorPlane.userData.kind='floor'; floorRoot.add(floorPlane);
 }
 function isWallModule(m){ return m?.type === 'wall' || m?.type === 'wallpath'; }
@@ -551,15 +584,16 @@ function parseCsvSingleCell(text){let s=String(text||'').trim();if(s.startsWith(
 async function getApiUrlFromSheet(force=false){
   if(!force&&activeApiUrl)return activeApiUrl;
   try{
+    setStartupStep('api','loading','正在讀取 Google Sheets 工作表1!B1…');
     const res=await fetch(API_CONFIG_CSV_URL,{cache:'no-store'});
     if(!res.ok)throw new Error(`B1 讀取失敗 HTTP ${res.status}`);
     const url=parseCsvSingleCell(await res.text());
     if(!/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec(?:\?.*)?$/i.test(url))throw new Error('工作表1!B1 不是有效的 Apps Script /exec 網址');
-    activeApiUrl=url;localStorage.setItem(API_CACHE_KEY,url);return url;
+    activeApiUrl=url;localStorage.setItem(API_CACHE_KEY,url);setStartupStep('api','done','已取得目前有效 /exec 網址');return url;
   }catch(err){
     const cached=localStorage.getItem(API_CACHE_KEY)||'';
-    if(cached){activeApiUrl=cached;els.apiStatusText.textContent=`工作表1!B1 暫時無法讀取，使用上次成功端點｜${err.message}`;return cached;}
-    throw err;
+    if(cached){activeApiUrl=cached;els.apiStatusText.textContent=`工作表1!B1 暫時無法讀取，使用上次成功端點｜${err.message}`;setStartupStep('api','done',`B1 暫時無法讀取，改用上次成功端點`);return cached;}
+    setStartupStep('api','error',err.message);throw err;
   }
 }
 async function apiGet(action,params={}){const base=await getApiUrlFromSheet();const u=new URL(base);u.searchParams.set('action',action);Object.entries(params).forEach(([k,v])=>u.searchParams.set(k,v));const r=await fetch(u.toString(),{cache:'no-store'});if(!r.ok)throw new Error(`API HTTP ${r.status}`);return await r.json();}
@@ -575,13 +609,17 @@ async function refreshCloudProjects(forceApi=false){
   try{
     if(forceApi){activeApiUrl='';localStorage.removeItem(API_CACHE_KEY);}
     setCloudStatus(false,'API 來源：工作表1!B1｜連線中…');
+    setStartupStep('ping','loading','正在測試 Apps Script API…');
     const ping=await apiGet('ping');if(!ping?.ok)throw new Error(ping?.message||'API ping 失敗');
+    setStartupStep('ping','done','Apps Script API 連線正常');
+    setStartupStep('cloud','loading','正在讀取 Google Sheets 雲端專案清單…');
     const data=await apiGet('listProjects');if(!data?.ok)throw new Error(data?.message||'讀取專案清單失敗');
     cloudProjects=Array.isArray(data.projects)?data.projects:[];
     setCloudStatus(true,`API 來源：工作表1!B1｜連線正常｜${cloudProjects.length} 個雲端專案`);
+    setStartupStep('cloud','done',`已載入 ${cloudProjects.length} 個雲端專案`);
     renderCloudProjects();
   }catch(err){
-    console.warn(err);setCloudStatus(false,`API 來源：工作表1!B1｜${err.message}`);els.projectList.innerHTML='<div class="empty-list">雲端連線失敗，請確認工作表1!B1、分享權限與 Apps Script 部署權限。</div>';els.savedCount.textContent='0 筆';
+    console.warn(err);setStartupStep('ping','error',err.message);setStartupStep('cloud','error','雲端專案清單未載入');setCloudStatus(false,`API 來源：工作表1!B1｜${err.message}`);els.projectList.innerHTML='<div class="empty-list">雲端連線失敗，請確認工作表1!B1、分享權限與 Apps Script 部署權限。</div>';els.savedCount.textContent='0 筆';showErrorModal('Google Sheets 雲端連線失敗',err,'工作表1!B1 / Apps Script API');
   }
 }
 function renderStore(){renderFolderOptions();renderCloudProjects();}
@@ -600,15 +638,15 @@ $('saveProjectBtn').onclick=async()=>{
     // 同步保留瀏覽器本機備份
     const s=ensureStore(),folderId=els.projectFolder.value;let lp=s.projects.find(x=>x.folderId===folderId&&x.name===name);if(lp){lp.data=payload;lp.updatedAt=Date.now();lp.version=APP_VERSION;}else{s.projects.push({id:result.projectId||uid('project'),folderId,name,data:payload,updatedAt:Date.now(),version:APP_VERSION});}setStore(s);
     els.statusText.textContent=`雲端儲存完成：${name}｜${APP_VERSION}`;await refreshCloudProjects();
-  }catch(err){console.warn(err);alert(`雲端儲存失敗：${err.message}`);els.statusText.textContent='雲端儲存失敗';}
+  }catch(err){console.warn(err);showErrorModal('雲端儲存失敗',err,'儲存到 Google Sheets');els.statusText.textContent='雲端儲存失敗';}
 };
 function applyPayload(p){if(p.catalog?.communities?.length){catalog=p.catalog;saveCatalog();}state.communityId=p.communityId||catalog.communities[0].id;state.floor=p.floor||currentCommunity()?.floors[0]?.id||'';state.showPlan=p.showPlan!==false;state.listFilter=p.listFilter||'camera';state.cameras=migrateFlatData(p.cameras);state.modules=migrateFlatData(p.modules);state.calibrations=p.calibrations||{};state.selected={kind:'camera',id:null};saveWorking();buildFloor();renderObjects();refreshUI();resetView();}
 async function loadProjectCloud(id){
   const meta=cloudProjects.find(x=>x.projectId===id);if(!meta)return;if(!confirm(`讀取「${meta.projectName}」？目前未儲存的變更會被取代。`))return;
-  try{const r=await apiGet('getProject',{projectId:id});if(!r?.ok||!r.project)throw new Error(r?.message||'讀取失敗');els.projectName.value=r.project.projectName||'';applyPayload(r.project.data||{});els.statusText.textContent=`已從雲端讀取：${r.project.projectName}｜${r.project.version||APP_VERSION}`;}catch(err){alert(`雲端讀取失敗：${err.message}`);}
+  try{const r=await apiGet('getProject',{projectId:id});if(!r?.ok||!r.project)throw new Error(r?.message||'讀取失敗');els.projectName.value=r.project.projectName||'';applyPayload(r.project.data||{});els.statusText.textContent=`已從雲端讀取：${r.project.projectName}｜${r.project.version||APP_VERSION}`;}catch(err){showErrorModal('雲端讀取失敗',err,'讀取 Google Sheets 專案');}
 }
-async function deleteProjectCloud(id){const meta=cloudProjects.find(x=>x.projectId===id);if(!meta)return;if(!confirm(`確定從 Google Sheets 刪除專案「${meta.projectName}」？`))return;try{const r=await apiPost({action:'deleteProject',projectId:id});if(!r?.ok)throw new Error(r?.message||'刪除失敗');els.statusText.textContent=`雲端專案已刪除：${meta.projectName}`;await refreshCloudProjects();}catch(err){alert(`雲端刪除失敗：${err.message}`);}}
-$('exportProjectBtn').onclick=async()=>{const name=els.projectName.value.trim()||`CCTV專案-${new Date().toISOString().slice(0,10)}`,payload={format:'UTOP-CCTV-3D-PROJECT',schemaVersion:4,appVersion:APP_VERSION,company:'昱拓弱電有限公司',name,exportedAt:new Date().toISOString(),data:buildProjectPayload()},blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),filename=`${name}.utop3d`;if(window.showSaveFilePicker){try{const h=await window.showSaveFilePicker({suggestedName:filename,types:[{description:'UTOP 3D Project',accept:{'application/json':['.utop3d','.json']}}]}),w=await h.createWritable();await w.write(blob);await w.close();els.statusText.textContent=`已匯出：${filename}`;return;}catch(e){if(e?.name!=='AbortError')console.warn(e);}}const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;a.click();URL.revokeObjectURL(a.href);};$('importProjectBtn').onclick=()=>$('importProjectFile').click();$('importProjectFile').onchange=async e=>{const file=e.target.files?.[0];if(!file)return;try{const j=JSON.parse(await file.text());applyPayload(j.data||j);els.projectName.value=j.name||file.name.replace(/\.(utop3d|json)$/i,'');els.statusText.textContent=`已匯入：${file.name}`;}catch(err){console.warn(err);alert('匯入失敗，檔案格式不正確。');}e.target.value='';};
+async function deleteProjectCloud(id){const meta=cloudProjects.find(x=>x.projectId===id);if(!meta)return;if(!confirm(`確定從 Google Sheets 刪除專案「${meta.projectName}」？`))return;try{const r=await apiPost({action:'deleteProject',projectId:id});if(!r?.ok)throw new Error(r?.message||'刪除失敗');els.statusText.textContent=`雲端專案已刪除：${meta.projectName}`;await refreshCloudProjects();}catch(err){showErrorModal('雲端刪除失敗',err,'刪除 Google Sheets 專案');}}
+$('exportProjectBtn').onclick=async()=>{const name=els.projectName.value.trim()||`CCTV專案-${new Date().toISOString().slice(0,10)}`,payload={format:'UTOP-CCTV-3D-PROJECT',schemaVersion:4,appVersion:APP_VERSION,company:'昱拓弱電有限公司',name,exportedAt:new Date().toISOString(),data:buildProjectPayload()},blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),filename=`${name}.utop3d`;if(window.showSaveFilePicker){try{const h=await window.showSaveFilePicker({suggestedName:filename,types:[{description:'UTOP 3D Project',accept:{'application/json':['.utop3d','.json']}}]}),w=await h.createWritable();await w.write(blob);await w.close();els.statusText.textContent=`已匯出：${filename}`;return;}catch(e){if(e?.name!=='AbortError')console.warn(e);}}const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;a.click();URL.revokeObjectURL(a.href);};$('importProjectBtn').onclick=()=>$('importProjectFile').click();$('importProjectFile').onchange=async e=>{const file=e.target.files?.[0];if(!file)return;try{const j=JSON.parse(await file.text());applyPayload(j.data||j);els.projectName.value=j.name||file.name.replace(/\.(utop3d|json)$/i,'');els.statusText.textContent=`已匯入：${file.name}`;}catch(err){console.warn(err);showErrorModal('匯入專案失敗',err,'專案檔格式');}e.target.value='';};
 
 $('openDriveFolderBtn').onclick=()=>{window.open(GOOGLE_DRIVE_PROJECT_URL,'_blank','noopener,noreferrer');els.statusText.textContent=`已開啟 Google Drive 專案資料夾｜${APP_VERSION}`;};
 $('copyDriveFolderBtn').onclick=async()=>{try{await navigator.clipboard.writeText(GOOGLE_DRIVE_PROJECT_URL);els.statusText.textContent='Google Drive 路徑已複製';}catch{prompt('請複製 Google Drive 路徑：',GOOGLE_DRIVE_PROJECT_URL);}};
@@ -632,4 +670,15 @@ function animate(){
   controls.update();
   renderer.render(scene,camera);
 }
-buildFloor();renderObjects();refreshUI();renderStore();resize();animate();refreshCloudProjects();
+async function startup(){
+  renderStartupModal();
+  try{
+    setStartupStep('local','loading','正在讀取瀏覽器本機專案與設定…');
+    const localCamCount=Object.values(state.cameras||{}).reduce((n,x)=>n+(Array.isArray(x)?x.length:0),0);
+    const localModCount=Object.values(state.modules||{}).reduce((n,x)=>n+(Array.isArray(x)?x.length:0),0);
+    setStartupStep('local','done',`社區 ${catalog.communities?.length||0} 個｜本機鏡頭 ${localCamCount} 支｜模組 ${localModCount} 個`);
+    buildFloor();renderObjects();refreshUI();renderStore();resize();animate();
+    await refreshCloudProjects();
+  }catch(err){showErrorModal('網站啟動失敗',err,'startup');}
+}
+startup();

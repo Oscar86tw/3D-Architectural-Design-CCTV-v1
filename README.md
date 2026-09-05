@@ -2,9 +2,9 @@
 
 昱拓弱電有限公司｜社區地下室 CCTV 3D 規劃。
 
-## 目前版本 V1.19
+## 目前版本 V1.20
 
-### V1.19 雲端整合
+### V1.20 雲端整合
 - Google Sheets：`1-jy-MWBXMyx92xZ-RTnwqpB-j7cMnlOIB2i1lh2eUZg`
 - API 有效端點來源固定為：`工作表1!B1`
 - 前端不永久寫死 Apps Script `/exec` 網址。
@@ -27,3 +27,7 @@
 ## 部署
 `1.GITHUB` 內容放 GitHub Pages。
 `2.GOOGLE API/Code.gs` 貼進 Google Apps Script，重新部署後執行 `updateWebAppUrl()`，確認 `工作表1!B1` 是新的 `/exec`。
+
+- **網站開啟時顯示啟動流程視窗**：本機資料 → 樓層圖面 → 工作表1!B1 API → Apps Script → 雲端專案清單
+- **全域錯誤訊息視窗**：JavaScript、Promise、圖面、Google Sheets API、儲存 / 讀取 / 刪除錯誤均可跳窗顯示
+- 錯誤視窗提供「複製錯誤資訊」按鈕，方便回報給 AI / 維修

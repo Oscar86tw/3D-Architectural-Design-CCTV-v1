@@ -42,3 +42,13 @@ body{overflow:hidden}
 #siteManager select,#siteManager input,#projectStorage select,#projectStorage input[type=text]{width:100%;margin-top:5px;background:#0d1620;border:1px solid #314354;border-radius:7px;color:white;padding:8px;outline:none}
 #siteManager .mini-btn,#projectStorage .mini-btn{white-space:nowrap}
 #scaleBadge{color:#d9f99d;border-color:#4d6b2b;background:#1d2f14}
+
+
+/* V1.20 系統流程 / 錯誤訊息視窗 */
+.system-modal{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(2,8,23,.74);backdrop-filter:blur(5px)}
+.system-modal.hidden{display:none}.system-modal-card{width:min(620px,94vw);max-height:82vh;overflow:hidden;border:1px solid #31506a;border-radius:16px;background:#0e1823;box-shadow:0 28px 80px rgba(0,0,0,.55);color:#e5eef7}
+.system-modal-card.error{border-color:#7f1d1d;box-shadow:0 28px 80px rgba(127,29,29,.24)}
+.system-modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:15px;padding:18px 20px 14px;border-bottom:1px solid #253748;background:#111e2a}.system-modal-head h3{margin:2px 0 0;font-size:18px}.modal-eyebrow{font-size:10px;letter-spacing:.14em;color:#65c8f6}.system-modal-card.error .modal-eyebrow{color:#fca5a5}
+.modal-close{border:0;background:transparent;color:#9db0c2;font-size:27px;line-height:1;cursor:pointer}.modal-close:hover{color:#fff}.system-modal-body{padding:18px 20px;overflow:auto;max-height:56vh}.system-modal-actions{display:flex;justify-content:flex-end;gap:9px;padding:13px 20px 18px;border-top:1px solid #253748}
+.startup-summary{margin:0 0 13px;color:#a8bbcc;font-size:12px}.flow-list{display:flex;flex-direction:column;gap:8px}.flow-row{display:grid;grid-template-columns:22px minmax(110px,160px) 1fr;gap:9px;align-items:start;padding:9px 10px;border:1px solid #26394a;border-radius:9px;background:#101c27;font-size:12px}.flow-icon{font-size:14px;line-height:18px}.flow-name{font-weight:700;color:#dce9f4}.flow-detail{color:#89a1b5;word-break:break-word}.flow-row.done{border-color:#185b48}.flow-row.done .flow-detail{color:#83d8bd}.flow-row.loading{border-color:#1d5d82}.flow-row.loading .flow-icon{animation:flowPulse 1s infinite}.flow-row.error{border-color:#7f1d1d;background:#221417}.flow-row.error .flow-detail{color:#fca5a5}@keyframes flowPulse{0%,100%{opacity:.35}50%{opacity:1}}
+.error-box{border:1px solid #7f1d1d;background:#211317;border-radius:10px;padding:12px 13px}.error-title{font-weight:800;color:#fecaca;margin-bottom:7px}.error-message{white-space:pre-wrap;word-break:break-word;color:#f1d5d5;font-size:13px;line-height:1.55}.error-meta{margin-top:10px;padding-top:10px;border-top:1px solid #4b2429;color:#b99a9d;font-size:11px;white-space:pre-wrap;word-break:break-word}
