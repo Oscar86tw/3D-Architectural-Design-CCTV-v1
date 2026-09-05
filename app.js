@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-const APP_VERSION = 'V1.38';
+const APP_VERSION = 'V1.39';
 const DEFAULT_COMMUNITY_ID = 'hualong-chao-plus';
 const CATALOG_KEY = 'cctv3d-site-catalog-v1-24';
 const WORKING_KEY = 'cctv3d-working-v1-24';
@@ -730,139 +730,120 @@ async function getApiUrlFromSheet(force=false){
   }
 }
 
-let gasBridgeFrame=null;
-let gasBridgeReady=false;
-let gasBridgeReadyPromise=null;
-let gasBridgeSeq=0;
-const gasBridgePending=new Map();
 
-function ensureGasBridge(){
-  if(gasBridgeReady && gasBridgeFrame) return Promise.resolve(gasBridgeFrame);
-  if(gasBridgeReadyPromise) return gasBridgeReadyPromise;
+let jsonpSeq=0;
 
-  gasBridgeReadyPromise=new Promise(async(resolve,reject)=>{
-    let timer=null;
-    let pingTimer=null;
-    let settled=false;
-
-    const cleanup=()=>{
-      if(timer)clearTimeout(timer);
-      if(pingTimer)clearInterval(pingTimer);
-      window.removeEventListener('message',onReady);
-    };
-
-    const fail=(err)=>{
-      if(settled)return;
-      settled=true;
-      cleanup();
-      reject(err instanceof Error?err:new Error(String(err)));
-    };
-
-    const succeed=()=>{
-      if(settled)return;
-      settled=true;
-      cleanup();
-      gasBridgeReady=true;
-      resolve(gasBridgeFrame);
-    };
-
-    const onReady=(event)=>{
-      if(!gasBridgeFrame || event.source!==gasBridgeFrame.contentWindow)return;
-      const data=event.data||{};
-      if(data.type==='CCTV_GAS_BRIDGE_READY' || data.type==='CCTV_GAS_BRIDGE_PONG'){
-        succeed();
-      }
-    };
-
-    // 先掛監聽，再建立 iframe，避免 Bridge 太快回 READY 而被漏接。
-    window.addEventListener('message',onReady);
-
+function jsonpApiGet(action,params={}){
+  return new Promise(async(resolve,reject)=>{
     try{
       const base=await getApiUrlFromSheet();
-      const bridgeUrl=new URL(base);
-      bridgeUrl.searchParams.set('mode','bridge');
-      bridgeUrl.searchParams.set('_ts',String(Date.now()));
+      const callback=`__cctvJsonp_${Date.now()}_${++jsonpSeq}`;
+      const u=new URL(base);
+      u.searchParams.set('action',action);
+      u.searchParams.set('callback',callback);
+      Object.entries(params||{}).forEach(([k,v])=>{
+        if(v!==undefined&&v!==null)u.searchParams.set(k,String(v));
+      });
 
-      gasBridgeFrame=document.createElement('iframe');
-      gasBridgeFrame.id='gasApiBridgeFrame';
-      gasBridgeFrame.style.position='fixed';
-      gasBridgeFrame.style.width='1px';
-      gasBridgeFrame.style.height='1px';
-      gasBridgeFrame.style.opacity='0';
-      gasBridgeFrame.style.pointerEvents='none';
-      gasBridgeFrame.style.border='0';
-      gasBridgeFrame.setAttribute('aria-hidden','true');
-
-      gasBridgeFrame.onload=()=>{
-        try{
-          gasBridgeFrame.contentWindow.postMessage({type:'CCTV_GAS_BRIDGE_PING'},'*');
-        }catch(_){}
+      const script=document.createElement('script');
+      let done=false;
+      const cleanup=()=>{
+        if(done)return;
+        done=true;
+        clearTimeout(timer);
+        try{delete window[callback];}catch(_){window[callback]=undefined;}
+        script.remove();
       };
 
-      gasBridgeFrame.onerror=()=>fail(new Error('Apps Script Bridge iframe 載入失敗'));
+      window[callback]=(data)=>{
+        cleanup();
+        resolve(data);
+      };
 
-      gasBridgeFrame.src=bridgeUrl.toString();
-      document.body.appendChild(gasBridgeFrame);
+      script.onerror=()=>{
+        cleanup();
+        reject(new Error(`JSONP API 載入失敗：${action}`));
+      };
 
-      // 每 500ms 主動握手，Bridge 就算第一次 READY 太早送出也能重新回應。
-      pingTimer=setInterval(()=>{
-        try{
-          gasBridgeFrame?.contentWindow?.postMessage({type:'CCTV_GAS_BRIDGE_PING'},'*');
-        }catch(_){}
-      },500);
-
-      timer=setTimeout(()=>{
-        fail(new Error('Apps Script Bridge 連線逾時。/exec?action=ping 已可用，但 Bridge 頁面沒有完成握手。請更新 V1.38 的 Code.gs 並重新部署新版本。'));
+      const timer=setTimeout(()=>{
+        cleanup();
+        reject(new Error(`JSONP API ${action} 逾時`));
       },15000);
+
+      script.src=u.toString();
+      document.head.appendChild(script);
     }catch(err){
-      fail(err);
+      reject(err);
     }
-  }).catch(err=>{
-    gasBridgeReadyPromise=null;
-    gasBridgeReady=false;
-    if(gasBridgeFrame){gasBridgeFrame.remove();gasBridgeFrame=null;}
-    throw err;
-  });
-
-  return gasBridgeReadyPromise;
-}
-
-window.addEventListener('message',event=>{
-  const data=event.data||{};
-  if(data.type!=='CCTV_GAS_BRIDGE_RESPONSE')return;
-  const pending=gasBridgePending.get(data.id);
-  if(!pending)return;
-  gasBridgePending.delete(data.id);
-  clearTimeout(pending.timer);
-  if(data.ok) pending.resolve(data.result);
-  else pending.reject(new Error(data.error||'Apps Script Bridge 執行失敗'));
-});
-
-async function gasBridgeCall(action,payload={}){
-  const frame=await ensureGasBridge();
-  const id=`gas_${Date.now()}_${++gasBridgeSeq}`;
-  return new Promise((resolve,reject)=>{
-    const timer=setTimeout(()=>{
-      gasBridgePending.delete(id);
-      reject(new Error(`Apps Script Bridge ${action} 執行逾時`));
-    },20000);
-    gasBridgePending.set(id,{resolve,reject,timer});
-    frame.contentWindow.postMessage({
-      type:'CCTV_GAS_BRIDGE_REQUEST',
-      id,
-      action,
-      payload
-    },'*');
   });
 }
 
 async function apiGet(action,params={}){
-  return await gasBridgeCall(action,{params});
+  return await jsonpApiGet(action,params);
 }
 
 async function apiPost(body){
-  const action=body?.action||'';
-  return await gasBridgeCall(action,{body});
+  const base=await getApiUrlFromSheet();
+  const frameName=`cctvPostFrame_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+
+  return await new Promise((resolve,reject)=>{
+    const iframe=document.createElement('iframe');
+    iframe.name=frameName;
+    iframe.style.display='none';
+
+    const form=document.createElement('form');
+    form.method='POST';
+    form.action=base;
+    form.target=frameName;
+    form.style.display='none';
+
+    const payload=document.createElement('input');
+    payload.type='hidden';
+    payload.name='payload';
+    payload.value=JSON.stringify(body||{});
+    form.appendChild(payload);
+
+    document.body.appendChild(iframe);
+    document.body.appendChild(form);
+
+    let submitted=false;
+    let settled=false;
+
+    const cleanup=()=>{
+      setTimeout(()=>{
+        form.remove();
+        iframe.remove();
+      },300);
+    };
+
+    const timeout=setTimeout(()=>{
+      if(settled)return;
+      settled=true;
+      cleanup();
+      reject(new Error(`POST ${body?.action||''} 執行逾時`));
+    },12000);
+
+    iframe.onload=async()=>{
+      if(!submitted)return;
+      if(settled)return;
+      // Cross-origin iframe 內容不可讀；以 GET 驗證後續狀態。
+      try{
+        await new Promise(r=>setTimeout(r,700));
+        settled=true;
+        clearTimeout(timeout);
+        cleanup();
+        resolve({ok:true,submitted:true});
+      }catch(err){
+        settled=true;
+        clearTimeout(timeout);
+        cleanup();
+        reject(err);
+      }
+    };
+
+    submitted=true;
+    form.submit();
+  });
 }
 
 function renderLocalProjects(){
@@ -978,126 +959,22 @@ els.localProjectFolder.onchange=()=>{updateFolderStateUI();renderLocalProjects()
 els.projectFolder.onchange=()=>{updateFolderStateUI();renderCloudProjects();};
 $('localNewFolderBtn').onclick=()=>addFolderFor(els.localProjectFolder);
 
-$('newFolderBtn').onclick=async()=>{const name=prompt('輸入新的雲端資料夾名稱：');if(!name?.trim())return;try{const r=await apiPost({action:'saveFolder',name:name.trim()});if(!r?.ok)throw new Error(r?.message||'新增資料夾失敗');await refreshCloudProjects();if(r.folder?.folderId)els.projectFolder.value=r.folder.folderId;renderCloudProjects();}catch(err){showErrorModal('新增雲端資料夾失敗',err,'Google Sheets 資料夾');}};
-
-
-function saveProjectLocal(){
-  const name=els.projectName.value.trim();if(!name){alert('請先輸入專案名稱。');return;}
-  const s=ensureStore(),fid=els.localProjectFolder.value,payload=buildProjectPayload();let p=s.projects.find(x=>x.folderId===fid&&x.name===name);
-  if(p){p.data=payload;p.updatedAt=Date.now();p.version=APP_VERSION;}else{s.projects.push({id:uid('local-project'),folderId:fid,name,data:payload,updatedAt:Date.now(),version:APP_VERSION,locked:false});}
-  setStore(s);renderLocalProjects();els.statusText.textContent=`本地儲存完成：${name}｜${APP_VERSION}`;
-}
-function loadProjectLocal(id){
-  const s=ensureStore(),p=s.projects.find(x=>x.id===id);if(!p)return;if(!confirm(`讀取本地專案「${p.name}」？目前未儲存的變更會被取代。`))return;
-  els.projectName.value=p.name;applyPayload(p.data||{});els.statusText.textContent=`已開啟本地專案：${p.name}｜${p.version||APP_VERSION}`;closeProjectStorage();
-}
-function deleteProjectLocal(id){
-  const s=ensureStore(),p=s.projects.find(x=>x.id===id);if(!p)return;if(p.locked){alert(`專案「${p.name}」已鎖定，請先解除鎖定後再刪除。`);return;}if(!confirm(`確定刪除本地專案「${p.name}」？`))return;s.projects=s.projects.filter(x=>x.id!==id);setStore(s);renderLocalProjects();
-}
-function toggleProjectLockLocal(id){
-  const s=ensureStore(),p=s.projects.find(x=>x.id===id);if(!p)return;p.locked=!p.locked;setStore(s);renderLocalProjects();els.statusText.textContent=`本地專案「${p.name}」${p.locked?'已鎖定':'已解除鎖定'}`;
-}
-
-$('saveLocalProjectBtn').onclick=saveProjectLocal;
-
-function safeFileName(name){
-  return String(name||'CCTV-3D-Project')
-    .trim()
-    .replace(/[\\/:*?"<>|]+/g,'-')
-    .replace(/\s+/g,' ')
-    .slice(0,80) || 'CCTV-3D-Project';
-}
-
-function exportCurrentProjectFile(){
+$('newFolderBtn').onclick=async()=>{
+  const name=prompt('輸入新的 Google Drive 資料夾名稱：');
+  if(!name?.trim())return;
   try{
-    const projectName=els.projectName.value.trim() || `${currentCommunity()?.name||'社區'}-${currentFloorMeta()?.name||state.floor||'樓層'}`;
-    const wrapper={
-      format:'UTOP-CCTV3D',
-      formatVersion:1,
-      appVersion:APP_VERSION,
-      projectName,
-      exportedAt:new Date().toISOString(),
-      data:buildProjectPayload()
-    };
-    const blob=new Blob([JSON.stringify(wrapper,null,2)],{type:'application/json;charset=utf-8'});
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement('a');
-    a.href=url;
-    a.download=`${safeFileName(projectName)}-${APP_VERSION}.utop3d`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url),1000);
-    els.statusText.textContent=`專案檔已匯出：${projectName}`;
+    const folderName=name.trim();
+    els.statusText.textContent=`正在 Google Drive 建立資料夾：${folderName}…`;
+    await apiPost({action:'saveFolder',name:folderName});
+    await refreshCloudProjects();
+    const found=cloudFolders.find(f=>f.name===folderName);
+    if(!found)throw new Error('已送出新增資料夾要求，但 Google Drive 尚未出現該資料夾。');
+    els.projectFolder.value=found.folderId;
+    renderCloudProjects();
+    els.statusText.textContent=`Google Drive 資料夾已建立：${folderName}`;
   }catch(err){
-    showErrorModal('匯出專案檔失敗',err,'本地儲存 / 匯出專案檔');
+    showErrorModal('新增 Google Drive 資料夾失敗',err,'Google Drive');
   }
-}
-
-async function importProjectFile(file){
-  if(!file)return;
-  try{
-    const raw=await file.text();
-    let parsed;
-    try{
-      parsed=JSON.parse(raw);
-    }catch{
-      throw new Error('檔案不是有效的 .utop3d / JSON 專案檔');
-    }
-
-    let payload=parsed;
-    let projectName=file.name.replace(/\.(utop3d|json)$/i,'');
-
-    if(parsed && parsed.format==='UTOP-CCTV3D'){
-      if(!parsed.data || typeof parsed.data!=='object') throw new Error('專案檔缺少 data 資料');
-      payload=parsed.data;
-      projectName=parsed.projectName||projectName;
-    }else if(parsed && parsed.data && typeof parsed.data==='object' && (parsed.projectName || parsed.version)){
-      payload=parsed.data;
-      projectName=parsed.projectName||projectName;
-    }
-
-    if(!payload || typeof payload!=='object') throw new Error('找不到可匯入的專案資料');
-    if(!payload.cameras && !payload.modules && !payload.catalog){
-      throw new Error('此檔案不是 CCTV 3D 專案格式');
-    }
-
-    if(!confirm(`匯入專案「${projectName}」？目前尚未儲存的畫面變更會被取代。`))return;
-
-    applyPayload(payload);
-    els.projectName.value=projectName;
-    els.statusText.textContent=`已匯入專案檔：${projectName}`;
-    renderStore();
-    closeProjectStorage();
-  }catch(err){
-    showErrorModal('匯入專案檔失敗',err,`本地儲存 / ${file.name||'未知檔案'}`);
-  }finally{
-    if(els.importProjectFile)els.importProjectFile.value='';
-  }
-}
-
-if(els.exportProjectBtn){
-  els.exportProjectBtn.onclick=exportCurrentProjectFile;
-}
-if(els.importProjectBtn && els.importProjectFile){
-  els.importProjectBtn.onclick=()=>els.importProjectFile.click();
-  els.importProjectFile.onchange=()=>importProjectFile(els.importProjectFile.files?.[0]);
-}
-
-function buildProjectPayload(){return{communityId:state.communityId,floor:state.floor,showPlan:state.showPlan,listFilter:state.listFilter,cameras:deepCopy(state.cameras),modules:deepCopy(state.modules),calibrations:deepCopy(state.calibrations),catalog:deepCopy(catalog)};}
-$('saveProjectBtn').onclick=async()=>{
-  const name=els.projectName.value.trim();if(!name){alert('請先輸入專案名稱。');return;}
-  const community=currentCommunity()?.name||'',floor=currentFloorMeta()?.name||state.floor,folder=selectedCloudFolder().name,payload=buildProjectPayload();
-  const existing=cloudProjects.find(p=>p.projectName===name&&p.community===community&&p.floor===floor&&(p.folder||'我的專案')===folder);
-  try{
-    els.statusText.textContent=`正在儲存到 Google Drive：${name}…`;
-    const result=await apiPost({action:'saveProject',projectId:existing?.projectId||'',community,floor,folder,projectName:name,version:APP_VERSION,data:payload});
-    if(!result?.ok)throw new Error(result?.message||'雲端儲存失敗');
-    if(!result.driveFileId)throw new Error('API 回傳成功，但沒有 Drive 檔案 ID；請確認 Apps Script 已部署 V1.33 並授權 Google Drive。');
-    // 同步保留瀏覽器本機備份
-    const s=ensureStore();let localFolder=s.folders.find(f=>f.name===folder);if(!localFolder){localFolder={id:uid('folder'),name:folder};s.folders.push(localFolder);}const folderId=localFolder.id;let lp=s.projects.find(x=>x.folderId===folderId&&x.name===name);if(lp){lp.data=payload;lp.updatedAt=Date.now();lp.version=APP_VERSION;}else{s.projects.push({id:result.projectId||uid('project'),folderId,name,data:payload,updatedAt:Date.now(),version:APP_VERSION,locked:!!existing?.locked});}setStore(s);
-    els.statusText.textContent=`Google Drive 雲端儲存完成：${name}｜${APP_VERSION}`;await refreshCloudProjects();
-  }catch(err){console.warn(err);showErrorModal('雲端儲存失敗',err,'儲存到 Google Drive');els.statusText.textContent='雲端儲存失敗';}
 };
 function applyPayload(p){if(p.catalog?.communities?.length){catalog=p.catalog;saveCatalog();}state.communityId=p.communityId||catalog.communities[0].id;state.floor=p.floor||currentCommunity()?.floors[0]?.id||'';state.showPlan=p.showPlan!==false;state.listFilter=p.listFilter||'camera';state.cameras=migrateFlatData(p.cameras);state.modules=migrateFlatData(p.modules);state.calibrations=p.calibrations||{};state.selected={kind:'camera',id:null};saveWorking();buildFloor();renderObjects();refreshUI();resetView();}
 async function loadProjectCloud(id){
@@ -1105,10 +982,10 @@ async function loadProjectCloud(id){
   try{const r=await apiGet('getProject',{projectId:id});if(!r?.ok||!r.project)throw new Error(r?.message||'讀取失敗');els.projectName.value=r.project.projectName||'';applyPayload(r.project.data||{});els.statusText.textContent=`已從雲端開啟：${r.project.projectName}｜${r.project.version||APP_VERSION}`;closeProjectStorage();}catch(err){showErrorModal('雲端讀取失敗',err,'讀取 Google Drive 專案');}
 }
 async function deleteProjectCloud(id){
-  const meta=cloudProjects.find(x=>x.projectId===id);if(!meta)return;if(meta.locked){alert(`雲端專案「${meta.projectName}」已鎖定，請先解除鎖定後再刪除。`);return;}if(!confirm(`確定從 Google Sheets 刪除專案「${meta.projectName}」？`))return;try{const r=await apiPost({action:'deleteProject',projectId:id});if(!r?.ok)throw new Error(r?.message||'刪除失敗');els.statusText.textContent=`雲端專案已刪除：${meta.projectName}`;await refreshCloudProjects();}catch(err){showErrorModal('雲端刪除失敗',err,'刪除 Google Drive 專案');}
+  const meta=cloudProjects.find(x=>x.projectId===id);if(!meta)return;if(meta.locked){alert(`雲端專案「${meta.projectName}」已鎖定，請先解除鎖定後再刪除。`);return;}if(!confirm(`確定從 Google Sheets 刪除專案「${meta.projectName}」？`))return;try{await apiPost({action:'deleteProject',projectId:id});await refreshCloudProjects();if(cloudProjects.some(p=>p.projectId===id))throw new Error('刪除要求已送出，但專案仍存在。');els.statusText.textContent=`雲端專案已刪除：${meta.projectName}`;}catch(err){showErrorModal('雲端刪除失敗',err,'刪除 Google Drive 專案');}
 }
 async function toggleProjectLockCloud(id){
-  const meta=cloudProjects.find(x=>x.projectId===id);if(!meta)return;try{const r=await apiPost({action:'setProjectLock',projectId:id,locked:!meta.locked});if(!r?.ok)throw new Error(r?.message||'專案鎖定設定失敗');await refreshCloudProjects();els.statusText.textContent=`雲端專案「${meta.projectName}」${r.locked?'已鎖定':'已解除鎖定'}`;}catch(err){showErrorModal('雲端專案鎖定失敗',err,'Google Sheets 專案');}
+  const meta=cloudProjects.find(x=>x.projectId===id);if(!meta)return;try{const target=!meta.locked;await apiPost({action:'setProjectLock',projectId:id,locked:target});await refreshCloudProjects();const updated=cloudProjects.find(p=>p.projectId===id);if(!updated||updated.locked!==target)throw new Error('鎖定要求已送出，但雲端狀態尚未更新。');els.statusText.textContent=`雲端專案「${meta.projectName}」${target?'已鎖定':'已解除鎖定'}`;}catch(err){showErrorModal('雲端專案鎖定失敗',err,'Google Sheets 專案');}
 }
 
 let animationStarted = false;
