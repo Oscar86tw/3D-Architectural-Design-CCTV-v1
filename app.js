@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-const APP_VERSION = 'V1.26';
+const APP_VERSION = 'V1.27';
 const DEFAULT_COMMUNITY_ID = 'hualong-chao-plus';
 const CATALOG_KEY = 'cctv3d-site-catalog-v1-24';
 const WORKING_KEY = 'cctv3d-working-v1-24';
@@ -729,14 +729,14 @@ async function apiPost(body){const base=await getApiUrlFromSheet();const r=await
 function renderLocalProjects(){
   const s=ensureStore(),fid=els.localProjectFolder?.value||s.folders[0].id,list=s.projects.filter(p=>p.folderId===fid).sort((a,b)=>b.updatedAt-a.updatedAt);
   els.localSavedCount.textContent=`${list.length} 筆`;
-  els.localProjectList.innerHTML=list.length?list.map(p=>`<div class="item"><div><strong>${p.locked?'🔒 ':''}${esc(p.name)}</strong><small>${new Date(p.updatedAt).toLocaleString()}・${esc(p.version||'')}・${p.locked?'已鎖定':'未鎖定'}</small></div><div class="project-actions"><button data-act="load" data-id="${esc(p.id)}">讀取</button><button data-act="lock" data-id="${esc(p.id)}">${p.locked?'🔓 解鎖':'🔒 鎖定'}</button><button class="danger" data-act="delete" data-id="${esc(p.id)}" ${p.locked?'disabled':''}>刪除</button></div></div>`).join(''):'<div class="empty-list">此資料夾尚無本地專案</div>';
+  els.localProjectList.innerHTML=list.length?list.map(p=>`<div class="item"><div><strong>${p.locked?'🔒 ':''}${esc(p.name)}</strong><small>${new Date(p.updatedAt).toLocaleString()}・${esc(p.version||'')}・${p.locked?'已鎖定':'未鎖定'}</small></div><div class="project-actions"><button data-act="load" data-id="${esc(p.id)}">開啟</button><button data-act="lock" data-id="${esc(p.id)}">${p.locked?'🔓 解鎖':'🔒 鎖定'}</button><button class="danger" data-act="delete" data-id="${esc(p.id)}" ${p.locked?'disabled':''}>刪除</button></div></div>`).join(''):'<div class="empty-list">此資料夾尚無本地專案</div>';
   els.localProjectList.querySelectorAll('button').forEach(b=>b.onclick=e=>{e.stopPropagation();if(b.dataset.act==='load')loadProjectLocal(b.dataset.id);else if(b.dataset.act==='lock')toggleProjectLockLocal(b.dataset.id);else deleteProjectLocal(b.dataset.id);});
 }
 function renderCloudProjects(){
   const folder=selectedCloudFolder();
   const list=cloudProjects.filter(p=>(p.folder||'我的專案')===folder.name).sort((a,b)=>new Date(b.updatedAt)-new Date(a.updatedAt));
   els.savedCount.textContent=`${list.length} 筆`;
-  els.projectList.innerHTML=list.length?list.map(p=>`<div class="item"><div><strong>${p.locked?'🔒 ':''}${esc(p.projectName)}</strong><small>${esc(p.community||'')}・${esc(p.floor||'')}・${esc(p.folder||'我的專案')}・${esc(p.version||'')}・${p.locked?'已鎖定':'未鎖定'}</small></div><div class="project-actions"><button data-act="load" data-id="${esc(p.projectId)}">讀取</button><button data-act="lock" data-id="${esc(p.projectId)}">${p.locked?'🔓 解鎖':'🔒 鎖定'}</button><button class="danger" data-act="delete" data-id="${esc(p.projectId)}" ${p.locked?'disabled':''}>刪除</button></div></div>`).join(''):'<div class="empty-list">此資料夾尚無雲端專案</div>';
+  els.projectList.innerHTML=list.length?list.map(p=>`<div class="item"><div><strong>${p.locked?'🔒 ':''}${esc(p.projectName)}</strong><small>${esc(p.community||'')}・${esc(p.floor||'')}・${esc(p.folder||'我的專案')}・${esc(p.version||'')}・${p.locked?'已鎖定':'未鎖定'}</small></div><div class="project-actions"><button data-act="load" data-id="${esc(p.projectId)}">開啟</button><button data-act="lock" data-id="${esc(p.projectId)}">${p.locked?'🔓 解鎖':'🔒 鎖定'}</button><button class="danger" data-act="delete" data-id="${esc(p.projectId)}" ${p.locked?'disabled':''}>刪除</button></div></div>`).join(''):'<div class="empty-list">此資料夾尚無雲端專案</div>';
   els.projectList.querySelectorAll('button').forEach(b=>b.onclick=e=>{e.stopPropagation();if(b.dataset.act==='load')loadProjectCloud(b.dataset.id);else if(b.dataset.act==='lock')toggleProjectLockCloud(b.dataset.id);else deleteProjectCloud(b.dataset.id);});
 }
 async function refreshCloudProjects(forceApi=false){
@@ -781,7 +781,7 @@ function saveProjectLocal(){
 }
 function loadProjectLocal(id){
   const s=ensureStore(),p=s.projects.find(x=>x.id===id);if(!p)return;if(!confirm(`讀取本地專案「${p.name}」？目前未儲存的變更會被取代。`))return;
-  els.projectName.value=p.name;applyPayload(p.data||{});els.statusText.textContent=`已讀取本地專案：${p.name}｜${p.version||APP_VERSION}`;closeProjectStorage();
+  els.projectName.value=p.name;applyPayload(p.data||{});els.statusText.textContent=`已開啟本地專案：${p.name}｜${p.version||APP_VERSION}`;closeProjectStorage();
 }
 function deleteProjectLocal(id){
   const s=ensureStore(),p=s.projects.find(x=>x.id===id);if(!p)return;if(p.locked){alert(`專案「${p.name}」已鎖定，請先解除鎖定後再刪除。`);return;}if(!confirm(`確定刪除本地專案「${p.name}」？`))return;s.projects=s.projects.filter(x=>x.id!==id);setStore(s);renderLocalProjects();
@@ -807,7 +807,7 @@ $('saveProjectBtn').onclick=async()=>{
 function applyPayload(p){if(p.catalog?.communities?.length){catalog=p.catalog;saveCatalog();}state.communityId=p.communityId||catalog.communities[0].id;state.floor=p.floor||currentCommunity()?.floors[0]?.id||'';state.showPlan=p.showPlan!==false;state.listFilter=p.listFilter||'camera';state.cameras=migrateFlatData(p.cameras);state.modules=migrateFlatData(p.modules);state.calibrations=p.calibrations||{};state.selected={kind:'camera',id:null};saveWorking();buildFloor();renderObjects();refreshUI();resetView();}
 async function loadProjectCloud(id){
   const meta=cloudProjects.find(x=>x.projectId===id);if(!meta)return;if(!confirm(`讀取「${meta.projectName}」？目前未儲存的變更會被取代。`))return;
-  try{const r=await apiGet('getProject',{projectId:id});if(!r?.ok||!r.project)throw new Error(r?.message||'讀取失敗');els.projectName.value=r.project.projectName||'';applyPayload(r.project.data||{});els.statusText.textContent=`已從雲端讀取：${r.project.projectName}｜${r.project.version||APP_VERSION}`;}catch(err){showErrorModal('雲端讀取失敗',err,'讀取 Google Sheets 專案');}
+  try{const r=await apiGet('getProject',{projectId:id});if(!r?.ok||!r.project)throw new Error(r?.message||'讀取失敗');els.projectName.value=r.project.projectName||'';applyPayload(r.project.data||{});els.statusText.textContent=`已從雲端開啟：${r.project.projectName}｜${r.project.version||APP_VERSION}`;closeProjectStorage();}catch(err){showErrorModal('雲端讀取失敗',err,'讀取 Google Sheets 專案');}
 }
 async function deleteProjectCloud(id){
   const meta=cloudProjects.find(x=>x.projectId===id);if(!meta)return;if(meta.locked){alert(`雲端專案「${meta.projectName}」已鎖定，請先解除鎖定後再刪除。`);return;}if(!confirm(`確定從 Google Sheets 刪除專案「${meta.projectName}」？`))return;try{const r=await apiPost({action:'deleteProject',projectId:id});if(!r?.ok)throw new Error(r?.message||'刪除失敗');els.statusText.textContent=`雲端專案已刪除：${meta.projectName}`;await refreshCloudProjects();}catch(err){showErrorModal('雲端刪除失敗',err,'刪除 Google Sheets 專案');}
@@ -815,6 +815,45 @@ async function deleteProjectCloud(id){
 async function toggleProjectLockCloud(id){
   const meta=cloudProjects.find(x=>x.projectId===id);if(!meta)return;try{const r=await apiPost({action:'setProjectLock',projectId:id,locked:!meta.locked});if(!r?.ok)throw new Error(r?.message||'專案鎖定設定失敗');await refreshCloudProjects();els.statusText.textContent=`雲端專案「${meta.projectName}」${r.locked?'已鎖定':'已解除鎖定'}`;}catch(err){showErrorModal('雲端專案鎖定失敗',err,'Google Sheets 專案');}
 }
+
+let animationStarted = false;
+
+function resize(){
+  const w = Math.max(1, els.viewer.clientWidth);
+  const h = Math.max(1, els.viewer.clientHeight);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h, false);
+}
+window.addEventListener('resize', resize);
+
+function animate(){
+  if(animationStarted) return;
+  animationStarted = true;
+
+  const frame = () => {
+    requestAnimationFrame(frame);
+
+    const now = performance.now() * 0.004;
+    scene.traverse(obj => {
+      if(obj.userData?.blinkType === 'invincible-star'){
+        const pulse = 0.78 + 0.22 * (0.5 + 0.5 * Math.sin(now * 2.4));
+        obj.scale.setScalar(pulse);
+        obj.rotation.z = Math.sin(now * 0.9) * 0.12;
+        if(obj.material){
+          obj.material.emissiveIntensity =
+            0.7 + 0.7 * (0.5 + 0.5 * Math.sin(now * 5.2));
+        }
+      }
+    });
+
+    controls.update();
+    renderer.render(scene, camera);
+  };
+
+  frame();
+}
+
 async function startup(){
   renderStartupModal();
   try{
