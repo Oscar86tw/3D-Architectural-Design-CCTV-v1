@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-const APP_VERSION = 'V1.41';
+const APP_VERSION = 'V1.43';
 const DEFAULT_COMMUNITY_ID = 'hualong-chao-plus';
-const CATALOG_KEY = 'cctv3d-site-catalog-v1-24';
-const WORKING_KEY = 'cctv3d-working-v1-24';
-const STORE_KEY = 'cctv3d-project-store-v1-24';
-const PREV_STORE_KEYS = ['cctv3d-project-store-v1-23','cctv3d-project-store-v1-22','cctv3d-project-store-v1-21','cctv3d-project-store-v1-20','cctv3d-project-store-v1-19','cctv3d-project-store-v1-18','cctv3d-project-store-v1-17','cctv3d-project-store-v1-16','cctv3d-project-store-v1-15','cctv3d-project-store-v1-14','cctv3d-project-store-v1-13','cctv3d-project-store-v1-12','cctv3d-project-store-v1-11','cctv3d-project-store-v1-10','cctv3d-project-store-v1-9','cctv3d-project-store-v1-8','cctv3d-project-store-v1-7','cctv3d-project-store-v1-6'];
+const CATALOG_KEY = 'cctv3d-site-catalog-v1-43';
+const WORKING_KEY = 'cctv3d-working-v1-43';
+const STORE_KEY = 'cctv3d-project-store-v1-43';
+const PREV_STORE_KEYS = ['cctv3d-project-store-v1-42','cctv3d-project-store-v1-41','cctv3d-project-store-v1-23','cctv3d-project-store-v1-22','cctv3d-project-store-v1-21','cctv3d-project-store-v1-20','cctv3d-project-store-v1-19','cctv3d-project-store-v1-18','cctv3d-project-store-v1-17','cctv3d-project-store-v1-16','cctv3d-project-store-v1-15','cctv3d-project-store-v1-14','cctv3d-project-store-v1-13','cctv3d-project-store-v1-12','cctv3d-project-store-v1-11','cctv3d-project-store-v1-10','cctv3d-project-store-v1-9','cctv3d-project-store-v1-8','cctv3d-project-store-v1-7','cctv3d-project-store-v1-6'];
 const GOOGLE_DRIVE_PROJECT_URL = 'https://drive.google.com/drive/folders/1FWduBvqlTmr1oTipmqR3sywO2VUCFq9i?usp=drive_link';
 const GOOGLE_SHEET_PROJECT_URL = 'https://docs.google.com/spreadsheets/d/1-jy-MWBXMyx92xZ-RTnwqpB-j7cMnlOIB2i1lh2eUZg/edit?usp=sharing';
 const GOOGLE_SHEET_ID = '1-jy-MWBXMyx92xZ-RTnwqpB-j7cMnlOIB2i1lh2eUZg';
@@ -784,73 +784,62 @@ async function apiGet(action,params={}){
 
 async function apiPost(body){
   const base=await getApiUrlFromSheet();
-  const requestId=`post_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-  const frameName=`cctvPostFrame_${requestId}`;
+  const frameName=`cctvPostFrame_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
-  return await new Promise((resolve,reject)=>{
-    const iframe=document.createElement('iframe');
-    iframe.name=frameName;
-    iframe.style.display='none';
+  const iframe=document.createElement('iframe');
+  iframe.name=frameName;
+  iframe.style.display='none';
 
-    const form=document.createElement('form');
-    form.method='POST';
-    form.action=base;
-    form.target=frameName;
-    form.style.display='none';
-    form.acceptCharset='UTF-8';
+  const form=document.createElement('form');
+  form.method='POST';
+  form.action=base;
+  form.target=frameName;
+  form.style.display='none';
+  form.acceptCharset='UTF-8';
 
-    const payload=document.createElement('input');
-    payload.type='hidden';
-    payload.name='payload';
-    payload.value=JSON.stringify(body||{});
+  const payload=document.createElement('input');
+  payload.type='hidden';
+  payload.name='payload';
+  payload.value=JSON.stringify(body||{});
+  form.appendChild(payload);
 
-    const req=document.createElement('input');
-    req.type='hidden';
-    req.name='requestId';
-    req.value=requestId;
+  document.body.appendChild(iframe);
+  document.body.appendChild(form);
 
-    form.appendChild(payload);
-    form.appendChild(req);
-    document.body.appendChild(iframe);
-    document.body.appendChild(form);
+  form.submit();
 
-    let settled=false;
+  // 跨網域 POST 不等待 iframe 回傳訊息。
+  // 真正成功與否由後續 JSONP 輪詢 Google Drive / Sheets 狀態確認。
+  setTimeout(()=>{
+    try{form.remove();iframe.remove();}catch(_){}
+  },5000);
 
-    const cleanup=()=>{
-      window.removeEventListener('message',onMessage);
-      setTimeout(()=>{
-        form.remove();
-        iframe.remove();
-      },300);
-    };
+  return {ok:true,submitted:true};
+}
 
-    const finish=(fn,value)=>{
-      if(settled)return;
-      settled=true;
-      clearTimeout(timeout);
-      cleanup();
-      fn(value);
-    };
+function sleep(ms){return new Promise(resolve=>setTimeout(resolve,ms));}
 
-    const onMessage=(event)=>{
-      const data=event.data||{};
-      if(data.type!=='CCTV_FORM_POST_RESULT' || data.requestId!==requestId)return;
+async function pollCloud(getter,predicate,{timeout=30000,interval=1000,label='雲端資料'}={}){
+  const started=Date.now();
+  let last=null;
+  while(Date.now()-started<timeout){
+    last=await getter();
+    if(predicate(last))return last;
+    await sleep(interval);
+  }
+  throw new Error(`${label} 等待逾時；Apps Script 已送出要求，但 Google Drive / Sheets 狀態沒有更新。`);
+}
 
-      if(data.result?.ok===false){
-        finish(reject,new Error(data.result.message||`POST ${body?.action||''} 執行失敗`));
-        return;
-      }
-      finish(resolve,data.result||{ok:true});
-    };
+async function readCloudProjectsRaw(){
+  const data=await apiGet('listProjects');
+  if(!data?.ok)throw new Error(data?.message||'讀取雲端專案清單失敗');
+  return Array.isArray(data.projects)?data.projects:[];
+}
 
-    window.addEventListener('message',onMessage);
-
-    const timeout=setTimeout(()=>{
-      finish(reject,new Error(`POST ${body?.action||''} 執行逾時；Apps Script 沒有回傳處理結果。`));
-    },30000);
-
-    form.submit();
-  });
+async function readCloudFoldersRaw(){
+  const data=await apiGet('listFolders');
+  if(!data?.ok)throw new Error(data?.message||'讀取雲端資料夾失敗');
+  return Array.isArray(data.folders)?data.folders:[];
 }
 
 function renderLocalProjects(){
@@ -966,23 +955,186 @@ els.localProjectFolder.onchange=()=>{updateFolderStateUI();renderLocalProjects()
 els.projectFolder.onchange=()=>{updateFolderStateUI();renderCloudProjects();};
 $('localNewFolderBtn').onclick=()=>addFolderFor(els.localProjectFolder);
 
+
+function buildProjectPayload(){
+  return{
+    communityId:state.communityId,
+    floor:state.floor,
+    showPlan:state.showPlan,
+    listFilter:state.listFilter,
+    cameras:deepCopy(state.cameras),
+    modules:deepCopy(state.modules),
+    calibrations:deepCopy(state.calibrations),
+    catalog:deepCopy(catalog)
+  };
+}
+
+function saveProjectLocal(){
+  const name=els.projectName.value.trim();
+  if(!name){alert('請先輸入專案名稱。');return;}
+  const s=ensureStore();
+  const fid=els.localProjectFolder.value;
+  const payload=buildProjectPayload();
+  let p=s.projects.find(x=>x.folderId===fid&&x.name===name);
+  if(p){
+    p.data=payload;p.updatedAt=Date.now();p.version=APP_VERSION;
+  }else{
+    s.projects.push({id:uid('local-project'),folderId:fid,name,data:payload,updatedAt:Date.now(),version:APP_VERSION,locked:false});
+  }
+  setStore(s);renderLocalProjects();
+  els.statusText.textContent=`本地儲存完成：${name}｜${APP_VERSION}`;
+}
+
+function loadProjectLocal(id){
+  const s=ensureStore(),p=s.projects.find(x=>x.id===id);
+  if(!p)return;
+  if(!confirm(`開啟本地專案「${p.name}」？目前未儲存的變更會被取代。`))return;
+  els.projectName.value=p.name;
+  applyPayload(p.data||{});
+  els.statusText.textContent=`已開啟本地專案：${p.name}｜${p.version||APP_VERSION}`;
+  closeProjectStorage();
+}
+
+function deleteProjectLocal(id){
+  const s=ensureStore(),p=s.projects.find(x=>x.id===id);
+  if(!p)return;
+  if(p.locked){alert(`專案「${p.name}」已鎖定，請先解除鎖定後再刪除。`);return;}
+  if(!confirm(`確定刪除本地專案「${p.name}」？`))return;
+  s.projects=s.projects.filter(x=>x.id!==id);setStore(s);renderLocalProjects();
+}
+
+function toggleProjectLockLocal(id){
+  const s=ensureStore(),p=s.projects.find(x=>x.id===id);
+  if(!p)return;
+  p.locked=!p.locked;setStore(s);renderLocalProjects();
+  els.statusText.textContent=`本地專案「${p.name}」${p.locked?'已鎖定':'已解除鎖定'}`;
+}
+
+if($('saveLocalProjectBtn'))$('saveLocalProjectBtn').onclick=saveProjectLocal;
+
+if(els.exportProjectBtn){
+  els.exportProjectBtn.onclick=()=>{
+    try{
+      const projectName=els.projectName.value.trim()||`${currentCommunity()?.name||'社區'}-${currentFloorMeta()?.name||state.floor||'樓層'}`;
+      const wrapper={format:'UTOP-CCTV3D',formatVersion:1,appVersion:APP_VERSION,projectName,exportedAt:new Date().toISOString(),data:buildProjectPayload()};
+      const blob=new Blob([JSON.stringify(wrapper,null,2)],{type:'application/json;charset=utf-8'});
+      const url=URL.createObjectURL(blob),a=document.createElement('a');
+      a.href=url;a.download=`${projectName.replace(/[\\/:*?"<>|]+/g,'-')}-${APP_VERSION}.utop3d`;
+      document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+      els.statusText.textContent=`專案檔已匯出：${projectName}`;
+    }catch(err){showErrorModal('匯出專案檔失敗',err,'本地儲存');}
+  };
+}
+
+if(els.importProjectBtn&&els.importProjectFile){
+  els.importProjectBtn.onclick=()=>els.importProjectFile.click();
+  els.importProjectFile.onchange=async()=>{
+    const file=els.importProjectFile.files?.[0];
+    if(!file)return;
+    try{
+      const parsed=JSON.parse(await file.text());
+      const payload=parsed?.format==='UTOP-CCTV3D'?parsed.data:(parsed?.data||parsed);
+      const projectName=parsed?.projectName||file.name.replace(/\.(utop3d|json)$/i,'');
+      if(!payload||typeof payload!=='object')throw new Error('無有效專案資料');
+      if(!confirm(`匯入專案「${projectName}」？目前未儲存的變更會被取代。`))return;
+      applyPayload(payload);els.projectName.value=projectName;
+      els.statusText.textContent=`已匯入專案檔：${projectName}`;closeProjectStorage();
+    }catch(err){showErrorModal('匯入專案檔失敗',err,'本地儲存');}
+    finally{els.importProjectFile.value='';}
+  };
+}
+
+if($('saveProjectBtn'))$('saveProjectBtn').onclick=async()=>{
+  const name=els.projectName.value.trim();
+  if(!name){alert('請先輸入專案名稱。');return;}
+
+  const community=currentCommunity()?.name||'';
+  const floor=currentFloorMeta()?.name||state.floor;
+  const folder=selectedCloudFolder().name;
+  const payload=buildProjectPayload();
+  const before=cloudProjects.find(p=>p.projectName===name&&p.community===community&&p.floor===floor&&(p.folder||'我的專案')===folder);
+  const beforeUpdated=before?.updatedAt?String(before.updatedAt):'';
+
+  if(!confirm(`確認儲存案件到 Google Drive？\n\n案件名稱：${name}\n社區：${community}\n樓層：${floor}\n儲存位置：${folder}`))return;
+
+  try{
+    els.statusText.textContent=`正在儲存到 Google Drive：${name}…`;
+
+    await apiPost({
+      action:'saveProject',
+      projectId:before?.projectId||'',
+      community,floor,folder,
+      projectName:name,
+      version:APP_VERSION,
+      data:payload
+    });
+
+    const projects=await pollCloud(
+      readCloudProjectsRaw,
+      list=>{
+        const p=list.find(x=>x.projectName===name&&x.community===community&&x.floor===floor&&(x.folder||'我的專案')===folder);
+        if(!p||!p.driveFileId)return false;
+        if(!before)return true;
+        return String(p.updatedAt||'')!==beforeUpdated || String(p.version||'')===APP_VERSION;
+      },
+      {timeout:35000,interval:1000,label:`案件「${name}」Google Drive 儲存`}
+    );
+
+    cloudProjects=projects;
+    renderCloudProjects();
+
+    const saved=projects.find(x=>x.projectName===name&&x.community===community&&x.floor===floor&&(x.folder||'我的專案')===folder);
+    if(!saved?.driveFileId)throw new Error('找不到 Drive 檔案 ID');
+
+    // 本機同步備份
+    const s=ensureStore();
+    let localFolder=s.folders.find(f=>f.name===folder);
+    if(!localFolder){localFolder={id:uid('folder'),name:folder};s.folders.push(localFolder);}
+    let lp=s.projects.find(x=>x.folderId===localFolder.id&&x.name===name);
+    if(lp){lp.data=payload;lp.updatedAt=Date.now();lp.version=APP_VERSION;}
+    else{s.projects.push({id:saved.projectId||uid('project'),folderId:localFolder.id,name,data:payload,updatedAt:Date.now(),version:APP_VERSION,locked:!!saved.locked});}
+    setStore(s);
+
+    els.statusText.textContent=`Google Drive 儲存完成：${name}｜Drive 已確認`;
+    alert(`案件已儲存完成。\n\n${name}\nGoogle Drive 檔案已確認建立。`);
+  }catch(err){
+    showErrorModal('雲端儲存失敗',err,'Google Drive / saveProject');
+    els.statusText.textContent='雲端儲存失敗';
+  }
+};
+
 $('newFolderBtn').onclick=async()=>{
   const name=prompt('輸入新的 Google Drive 資料夾名稱：');
   if(!name?.trim())return;
+  const folderName=name.trim();
+
   try{
-    const folderName=name.trim();
     els.statusText.textContent=`正在 Google Drive 建立資料夾：${folderName}…`;
-    const result=await apiPost({action:'saveFolder',name:folderName});
-    if(!result?.ok)throw new Error(result?.message||'新增 Google Drive 資料夾失敗');
-    if(!result.folder?.folderId)throw new Error('Apps Script 沒有回傳 Google Drive 資料夾 ID');
-    await refreshCloudProjects();
-    const found=cloudFolders.find(f=>f.folderId===result.folder.folderId||f.name===folderName);
-    if(!found)throw new Error('Apps Script 回報資料夾已建立，但重新讀取 Drive 後仍找不到。');
+    const existing=cloudFolders.find(f=>f.name===folderName);
+    if(existing){
+      els.projectFolder.value=existing.folderId;
+      renderCloudProjects();
+      els.statusText.textContent=`資料夾已存在：${folderName}`;
+      return;
+    }
+
+    await apiPost({action:'saveFolder',name:folderName});
+
+    const folders=await pollCloud(
+      readCloudFoldersRaw,
+      list=>list.some(f=>f.name===folderName),
+      {timeout:30000,interval:1000,label:`Google Drive 資料夾「${folderName}」建立`}
+    );
+
+    cloudFolders=folders;
+    renderCloudFolderOptions();
+    const found=folders.find(f=>f.name===folderName);
+    if(!found)throw new Error('建立後仍找不到資料夾');
     els.projectFolder.value=found.folderId;
     renderCloudProjects();
     els.statusText.textContent=`Google Drive 資料夾已建立：${folderName}`;
   }catch(err){
-    showErrorModal('新增 Google Drive 資料夾失敗',err,'Google Drive');
+    showErrorModal('新增 Google Drive 資料夾失敗',err,'Google Drive / saveFolder');
   }
 };
 function applyPayload(p){if(p.catalog?.communities?.length){catalog=p.catalog;saveCatalog();}state.communityId=p.communityId||catalog.communities[0].id;state.floor=p.floor||currentCommunity()?.floors[0]?.id||'';state.showPlan=p.showPlan!==false;state.listFilter=p.listFilter||'camera';state.cameras=migrateFlatData(p.cameras);state.modules=migrateFlatData(p.modules);state.calibrations=p.calibrations||{};state.selected={kind:'camera',id:null};saveWorking();buildFloor();renderObjects();refreshUI();resetView();}
@@ -991,10 +1143,30 @@ async function loadProjectCloud(id){
   try{const r=await apiGet('getProject',{projectId:id});if(!r?.ok||!r.project)throw new Error(r?.message||'讀取失敗');els.projectName.value=r.project.projectName||'';applyPayload(r.project.data||{});els.statusText.textContent=`已從雲端開啟：${r.project.projectName}｜${r.project.version||APP_VERSION}`;closeProjectStorage();}catch(err){showErrorModal('雲端讀取失敗',err,'讀取 Google Drive 專案');}
 }
 async function deleteProjectCloud(id){
-  const meta=cloudProjects.find(x=>x.projectId===id);if(!meta)return;if(meta.locked){alert(`雲端專案「${meta.projectName}」已鎖定，請先解除鎖定後再刪除。`);return;}if(!confirm(`確定從 Google Sheets 刪除專案「${meta.projectName}」？`))return;try{await apiPost({action:'deleteProject',projectId:id});await refreshCloudProjects();if(cloudProjects.some(p=>p.projectId===id))throw new Error('刪除要求已送出，但專案仍存在。');els.statusText.textContent=`雲端專案已刪除：${meta.projectName}`;}catch(err){showErrorModal('雲端刪除失敗',err,'刪除 Google Drive 專案');}
+  const meta=cloudProjects.find(x=>x.projectId===id);
+  if(!meta)return;
+  if(meta.locked){alert(`雲端專案「${meta.projectName}」已鎖定，請先解除鎖定後再刪除。`);return;}
+  if(!confirm(`確定刪除 Google Drive 專案「${meta.projectName}」？`))return;
+  try{
+    await apiPost({action:'deleteProject',projectId:id});
+    const list=await pollCloud(readCloudProjectsRaw,items=>!items.some(p=>p.projectId===id),{timeout:30000,interval:1000,label:'刪除雲端案件'});
+    cloudProjects=list;renderCloudProjects();
+    els.statusText.textContent=`雲端專案已刪除：${meta.projectName}`;
+  }catch(err){showErrorModal('雲端刪除失敗',err,'Google Drive / deleteProject');}
 }
 async function toggleProjectLockCloud(id){
-  const meta=cloudProjects.find(x=>x.projectId===id);if(!meta)return;try{const target=!meta.locked;await apiPost({action:'setProjectLock',projectId:id,locked:target});await refreshCloudProjects();const updated=cloudProjects.find(p=>p.projectId===id);if(!updated||updated.locked!==target)throw new Error('鎖定要求已送出，但雲端狀態尚未更新。');els.statusText.textContent=`雲端專案「${meta.projectName}」${target?'已鎖定':'已解除鎖定'}`;}catch(err){showErrorModal('雲端專案鎖定失敗',err,'Google Sheets 專案');}
+  const meta=cloudProjects.find(x=>x.projectId===id);
+  if(!meta)return;
+  const target=!meta.locked;
+  try{
+    await apiPost({action:'setProjectLock',projectId:id,locked:target});
+    const list=await pollCloud(readCloudProjectsRaw,items=>{
+      const p=items.find(x=>x.projectId===id);
+      return !!p&&p.locked===target;
+    },{timeout:30000,interval:1000,label:'更新案件鎖定狀態'});
+    cloudProjects=list;renderCloudProjects();
+    els.statusText.textContent=`雲端專案「${meta.projectName}」${target?'已鎖定':'已解除鎖定'}`;
+  }catch(err){showErrorModal('雲端專案鎖定失敗',err,'Google Drive / setProjectLock');}
 }
 
 let animationStarted = false;
