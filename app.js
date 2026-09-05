@@ -1,19 +1,19 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-const APP_VERSION = 'V1.11';
+const APP_VERSION = 'V1.14';
 const DEFAULT_COMMUNITY_ID = 'hualong-chao-plus';
-const CATALOG_KEY = 'cctv3d-site-catalog-v1-11';
-const WORKING_KEY = 'cctv3d-working-v1-11';
-const STORE_KEY = 'cctv3d-project-store-v1-11';
-const PREV_STORE_KEYS = ['cctv3d-project-store-v1-10','cctv3d-project-store-v1-9','cctv3d-project-store-v1-8','cctv3d-project-store-v1-7','cctv3d-project-store-v1-6'];
+const CATALOG_KEY = 'cctv3d-site-catalog-v1-14';
+const WORKING_KEY = 'cctv3d-working-v1-14';
+const STORE_KEY = 'cctv3d-project-store-v1-14';
+const PREV_STORE_KEYS = ['cctv3d-project-store-v1-13','cctv3d-project-store-v1-12','cctv3d-project-store-v1-11','cctv3d-project-store-v1-10','cctv3d-project-store-v1-9','cctv3d-project-store-v1-8','cctv3d-project-store-v1-7','cctv3d-project-store-v1-6'];
 const PX_TO_UNIT = 0.04; // 所有圖面 X/Z 使用同一縮放係數，不改變圖紙長寬比例
 
 const CAMERA_COLOR_PRESETS = {
   red:    { label:'原建置', body:0xdc2626, cone:0xef4444, line:0xf87171 },
-  blue:   { label:'增設',   body:0x2563eb, cone:0x3b82f6, line:0x60a5fa },
+  blue:   { label:'藍',     body:0x2563eb, cone:0x3b82f6, line:0x60a5fa },
   orange: { label:'故障',   body:0xea580c, cone:0xf97316, line:0xfb923c },
-  yellow: { label:'黃',     body:0xca8a04, cone:0xeab308, line:0xfacc15 },
+  yellow: { label:'增設',   body:0xca8a04, cone:0xeab308, line:0xfacc15 },
   green:  { label:'綠',     body:0x16a34a, cone:0x22c55e, line:0x4ade80 },
   purple: { label:'紫',     body:0x7c3aed, cone:0x8b5cf6, line:0xa78bfa },
   gray:   { label:'灰',     body:0x4b5563, cone:0x6b7280, line:0x9ca3af }
@@ -44,8 +44,8 @@ const camInputs = {
   fov:$('camFov'), fovOut:$('camFovOut'), range:$('camRange'), rangeOut:$('camRangeOut'), yaw:$('camYaw'), yawOut:$('camYawOut'), note:$('camNote')
 };
 const modInputs = {
-  name:$('modName'), type:$('modType'), length:$('modLength'), width:$('modWidth'), height:$('modHeight'), thickness:$('modThickness'), angle:$('modAngle'), angleOut:$('modAngleOut'), fixed:$('modFixed'),
-  widthWrap:$('modWidthWrap'), thicknessWrap:$('modThicknessWrap')
+  name:$('modName'), type:$('modType'), length:$('modLength'), width:$('modWidth'), height:$('modHeight'), thickness:$('modThickness'), angle:$('modAngle'), angleOut:$('modAngleOut'), fixed:$('modFixed'), occludes:$('modOccludes'),
+  widthWrap:$('modWidthWrap'), thicknessWrap:$('modThicknessWrap'), occludeWrap:$('modOccludeWrap')
 };
 
 els.versionBadge.textContent = APP_VERSION;
@@ -63,7 +63,7 @@ function defaultCatalog(){
 }
 function loadCatalog(){
   try{
-    const parsed = JSON.parse(localStorage.getItem(CATALOG_KEY) || localStorage.getItem('cctv3d-site-catalog-v1-10') || localStorage.getItem('cctv3d-site-catalog-v1-9') || 'null');
+    const parsed = JSON.parse(localStorage.getItem(CATALOG_KEY) || localStorage.getItem('cctv3d-site-catalog-v1-13') || localStorage.getItem('cctv3d-site-catalog-v1-12') || localStorage.getItem('cctv3d-site-catalog-v1-11') || localStorage.getItem('cctv3d-site-catalog-v1-10') || localStorage.getItem('cctv3d-site-catalog-v1-9') || 'null');
     if(parsed?.communities?.length) return parsed;
   }catch{}
   const d = defaultCatalog(); localStorage.setItem(CATALOG_KEY, JSON.stringify(d)); return d;
@@ -95,7 +95,7 @@ function migrateFlatData(raw){
 function loadWorking(){
   const base = { communityId:DEFAULT_COMMUNITY_ID, floor:'B1', showPlan:true, listFilter:'camera', cameras:{}, modules:{}, calibrations:{}, selected:{kind:'camera',id:null} };
   try{
-    const raw = JSON.parse(localStorage.getItem(WORKING_KEY) || localStorage.getItem('cctv3d-working-v1-10') || localStorage.getItem('cctv3d-working-v1-9') || 'null');
+    const raw = JSON.parse(localStorage.getItem(WORKING_KEY) || localStorage.getItem('cctv3d-working-v1-13') || localStorage.getItem('cctv3d-working-v1-12') || localStorage.getItem('cctv3d-working-v1-11') || localStorage.getItem('cctv3d-working-v1-10') || localStorage.getItem('cctv3d-working-v1-9') || 'null');
     if(raw) return { ...base, ...raw, cameras:migrateFlatData(raw.cameras), modules:migrateFlatData(raw.modules), calibrations:raw.calibrations || {} };
     const prev = JSON.parse(localStorage.getItem('cctv3d-working-v1-8') || localStorage.getItem('cctv3d-working-v1-7') || 'null');
     if(prev){
@@ -162,6 +162,7 @@ function getModuleCorners(m){
 function obstacleSegments(){
   const segs=[];
   currentModules().forEach(m=>{
+    if(isVehicleModule(m) && m.occludes === false) return;
     if(m.type==='wallpath' && Array.isArray(m.points) && m.points.length>=2){
       const count=m.closed?m.points.length:m.points.length-1;
       for(let i=0;i<count;i++){
@@ -180,17 +181,137 @@ function occludedDistances(cam){
   for(let i=0;i<=samples;i++){ const a=-theta/2+theta*(i/samples); const v=new THREE.Vector3(Math.cos(a),0,-Math.sin(a)).applyAxisAngle(new THREE.Vector3(0,1,0),-yaw); let nearest=range; for(const [p1,p2] of segments){const d=raySeg(origin,{x:v.x,z:v.z},p1,p2); if(d!==null&&d>.08&&d<nearest)nearest=d;} out.push({a,d:nearest}); }
   return out;
 }
-function addBlueBalloon(group,cameraData){
-  if(cameraData.colorKey!=='blue') return;
-  const height=metersToWorld(4);
-  const radius=Math.max(.32,Math.min(1.1,metersToWorld(.32)));
-  const balloon=new THREE.Mesh(new THREE.SphereGeometry(radius,22,16),new THREE.MeshStandardMaterial({color:CAMERA_COLOR_PRESETS.blue.body,roughness:.38,metalness:.05,emissive:0x071b44}));
-  balloon.position.set(0,height,0); balloon.scale.y=1.15; balloon.userData=group.userData; group.add(balloon);
-  const tail=new THREE.Mesh(new THREE.ConeGeometry(radius*.22,radius*.45,10),new THREE.MeshStandardMaterial({color:CAMERA_COLOR_PRESETS.blue.body}));
-  tail.position.set(0,height-radius*1.28,0); tail.rotation.x=Math.PI; tail.userData=group.userData; group.add(tail);
-  const stemPts=[new THREE.Vector3(0,3.05,0),new THREE.Vector3(0,height-radius*1.45,0)];
-  const stem=new THREE.Line(new THREE.BufferGeometry().setFromPoints(stemPts),new THREE.LineBasicMaterial({color:0x60a5fa,transparent:true,opacity:.9})); stem.userData=group.userData; group.add(stem);
+function addSpecialMarker(group,cameraData){
+  if(cameraData.colorKey!=='yellow') return;
+  const height = metersToWorld(7);
+  const starColor = CAMERA_COLOR_PRESETS.yellow.body;
+  const line = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.03,0.03,Math.max(height-1.2,0.6),8),
+    new THREE.MeshStandardMaterial({color:0xf8fafc, roughness:.4, metalness:.18})
+  );
+  line.position.set(0, Math.max((height-1.2)/2,0.3), 0); line.userData = group.userData; group.add(line);
+
+  const starShape = new THREE.Shape();
+  const outer = 0.85, inner = 0.38;
+  for(let i=0;i<10;i++){
+    const r = i % 2 === 0 ? outer : inner;
+    const a = -Math.PI/2 + i * Math.PI/5;
+    const x = Math.cos(a)*r, y = Math.sin(a)*r;
+    if(i===0) starShape.moveTo(x,y); else starShape.lineTo(x,y);
+  }
+  starShape.closePath();
+  const starGeo = new THREE.ExtrudeGeometry(starShape,{depth:0.28, bevelEnabled:true, bevelSegments:1, bevelSize:0.06, bevelThickness:0.04});
+  starGeo.center();
+  const star = new THREE.Mesh(starGeo, new THREE.MeshStandardMaterial({color:0xfacc15, emissive:0x7c5b02, emissiveIntensity:0.95, roughness:.28, metalness:.14}));
+  star.position.set(0, height, 0); star.rotation.y = THREE.MathUtils.degToRad(18); star.userData = { ...group.userData, blinkType:'invincible-star', baseY:height, baseScale:1 };
+  group.add(star);
+
+  const eyeGeo = new THREE.BoxGeometry(0.10,0.18,0.05);
+  const eyeMat = new THREE.MeshStandardMaterial({color:0x111827, roughness:.5, metalness:0});
+  const eye1 = new THREE.Mesh(eyeGeo, eyeMat); eye1.position.set(-0.18, height+0.05, 0.18); eye1.userData = group.userData; group.add(eye1);
+  const eye2 = new THREE.Mesh(eyeGeo, eyeMat); eye2.position.set(0.18, height+0.05, 0.18); eye2.userData = group.userData; group.add(eye2);
 }
+
+function createMaterial(opts={}){
+  return new THREE.MeshStandardMaterial({ roughness:.42, metalness:.22, ...opts });
+}
+function addWheel(group, radius, width, x, y, z){
+  const tire = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, width, 18), createMaterial({ color:0x111827, roughness:.86, metalness:.08 }));
+  tire.rotation.z = Math.PI / 2; tire.position.set(x, y, z); tire.userData = group.userData; group.add(tire);
+  const rim = new THREE.Mesh(new THREE.CylinderGeometry(radius*.55, radius*.55, width*1.03, 12), createMaterial({ color:0xcbd5e1, roughness:.35, metalness:.58 }));
+  rim.rotation.z = Math.PI / 2; rim.position.set(x, y, z); rim.userData = group.userData; group.add(rim);
+}
+function addVehicleShadow(group, len, wid){
+  const shadow = new THREE.Mesh(new THREE.PlaneGeometry(len*.92, wid*.82), new THREE.MeshBasicMaterial({ color:0x020617, transparent:true, opacity:.18, depthWrite:false }));
+  shadow.rotation.x = -Math.PI / 2; shadow.position.y = .02; shadow.userData = group.userData; group.add(shadow);
+}
+function buildSportsCarGroup(group, m, sel){
+  const L = metersToWorld(m.length || 4.6), W = metersToWorld(m.width || 1.9), H = metersToWorld(m.height || 1.35);
+  const bodyColor = sel ? 0xfde68a : 0xdc2626;
+  addVehicleShadow(group, L, W);
+
+  const lower = new THREE.Mesh(new THREE.BoxGeometry(L*.94, H*.24, W*.92), createMaterial({ color:bodyColor, emissive: sel ? 0x3b2f06 : 0x220404 }));
+  lower.position.y = H*.18; lower.userData = group.userData; group.add(lower);
+
+  const nose = new THREE.Mesh(new THREE.BoxGeometry(L*.20, H*.16, W*.82), createMaterial({ color:bodyColor }));
+  nose.position.set(L*.37, H*.20, 0); nose.rotation.z = -THREE.MathUtils.degToRad(9); nose.userData = group.userData; group.add(nose);
+
+  const hood = new THREE.Mesh(new THREE.BoxGeometry(L*.23, H*.08, W*.74), createMaterial({ color:lightHex(bodyColor,.08) }));
+  hood.position.set(L*.17, H*.28, 0); hood.rotation.z = -THREE.MathUtils.degToRad(5); hood.userData = group.userData; group.add(hood);
+
+  const cabin = new THREE.Mesh(new THREE.BoxGeometry(L*.34, H*.22, W*.68), createMaterial({ color:0x0f172a, transparent:true, opacity:.88, roughness:.22, metalness:.38 }));
+  cabin.position.set(-L*.02, H*.39, 0); cabin.rotation.z = -THREE.MathUtils.degToRad(7); cabin.userData = group.userData; group.add(cabin);
+
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(L*.18, H*.08, W*.52), createMaterial({ color:0x111827, roughness:.25, metalness:.32 }));
+  roof.position.set(-L*.04, H*.51, 0); roof.userData = group.userData; group.add(roof);
+
+  const rear = new THREE.Mesh(new THREE.BoxGeometry(L*.26, H*.18, W*.80), createMaterial({ color:bodyColor }));
+  rear.position.set(-L*.30, H*.28, 0); rear.rotation.z = THREE.MathUtils.degToRad(4); rear.userData = group.userData; group.add(rear);
+
+  const diffuser = new THREE.Mesh(new THREE.BoxGeometry(L*.12, H*.05, W*.76), createMaterial({ color:0x0f172a, roughness:.65, metalness:.12 }));
+  diffuser.position.set(-L*.44, H*.10, 0); diffuser.userData = group.userData; group.add(diffuser);
+
+  const spoilerPost1 = new THREE.Mesh(new THREE.BoxGeometry(L*.02, H*.08, W*.03), createMaterial({ color:0x111827 }));
+  spoilerPost1.position.set(-L*.37, H*.40, W*.20); spoilerPost1.userData = group.userData; group.add(spoilerPost1);
+  const spoilerPost2 = spoilerPost1.clone(); spoilerPost2.position.z = -W*.20; spoilerPost2.userData = group.userData; group.add(spoilerPost2);
+  const spoiler = new THREE.Mesh(new THREE.BoxGeometry(L*.13, H*.03, W*.50), createMaterial({ color:0x0f172a }));
+  spoiler.position.set(-L*.37, H*.45, 0); spoiler.userData = group.userData; group.add(spoiler);
+
+  const splitter = new THREE.Mesh(new THREE.BoxGeometry(L*.08, H*.03, W*.78), createMaterial({ color:0x111827 }));
+  splitter.position.set(L*.46, H*.08, 0); splitter.userData = group.userData; group.add(splitter);
+
+  const lightGeo = new THREE.BoxGeometry(L*.03, H*.04, W*.12);
+  const head1 = new THREE.Mesh(lightGeo, createMaterial({ color:0xfef3c7, emissive:0x8a6f1a, roughness:.25 }));
+  head1.position.set(L*.47, H*.18, W*.25); head1.userData = group.userData; group.add(head1);
+  const head2 = head1.clone(); head2.position.z = -W*.25; head2.userData = group.userData; group.add(head2);
+  const tail1 = new THREE.Mesh(lightGeo, createMaterial({ color:0xf87171, emissive:0x7f1d1d, roughness:.25 }));
+  tail1.position.set(-L*.48, H*.16, W*.23); tail1.userData = group.userData; group.add(tail1);
+  const tail2 = tail1.clone(); tail2.position.z = -W*.23; tail2.userData = group.userData; group.add(tail2);
+
+  const wheelR = metersToWorld(.34), wheelW = metersToWorld(.24);
+  [[ L*.24, wheelR,  W*.36],[ L*.24, wheelR, -W*.36],[-L*.23, wheelR,  W*.36],[-L*.23, wheelR, -W*.36]].forEach(pos => addWheel(group, wheelR, wheelW, ...pos));
+}
+function buildSportMotorcycleGroup(group, m, sel){
+  const L = metersToWorld(m.length || 2.0), W = metersToWorld(m.width || .8), H = metersToWorld(m.height || 1.1);
+  const bodyColor = sel ? 0xfde68a : 0x2563eb;
+  addVehicleShadow(group, L, W);
+
+  const wheelR = metersToWorld(.28), wheelW = metersToWorld(.12);
+  addWheel(group, wheelR, wheelW, L*.34, wheelR, 0);
+  addWheel(group, wheelR, wheelW, -L*.30, wheelR, 0);
+
+  const frame = new THREE.Mesh(new THREE.BoxGeometry(L*.44, H*.08, W*.20), createMaterial({ color:0x111827, roughness:.55, metalness:.24 }));
+  frame.position.set(0, H*.38, 0); frame.rotation.z = -THREE.MathUtils.degToRad(16); frame.userData = group.userData; group.add(frame);
+
+  const tank = new THREE.Mesh(new THREE.BoxGeometry(L*.22, H*.16, W*.34), createMaterial({ color:bodyColor, emissive: sel ? 0x3b2f06 : 0x071b44 }));
+  tank.position.set(L*.02, H*.47, 0); tank.rotation.z = -THREE.MathUtils.degToRad(12); tank.userData = group.userData; group.add(tank);
+
+  const fairing = new THREE.Mesh(new THREE.BoxGeometry(L*.18, H*.20, W*.30), createMaterial({ color:bodyColor }));
+  fairing.position.set(L*.22, H*.48, 0); fairing.rotation.z = -THREE.MathUtils.degToRad(24); fairing.userData = group.userData; group.add(fairing);
+
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(L*.16, H*.08, W*.28), createMaterial({ color:0x0f172a }));
+  seat.position.set(-L*.10, H*.53, 0); seat.rotation.z = THREE.MathUtils.degToRad(10); seat.userData = group.userData; group.add(seat);
+
+  const tail = new THREE.Mesh(new THREE.BoxGeometry(L*.13, H*.11, W*.22), createMaterial({ color:bodyColor }));
+  tail.position.set(-L*.22, H*.57, 0); tail.rotation.z = THREE.MathUtils.degToRad(18); tail.userData = group.userData; group.add(tail);
+
+  const windscreen = new THREE.Mesh(new THREE.BoxGeometry(L*.08, H*.15, W*.18), createMaterial({ color:0xbfe3ff, transparent:true, opacity:.70, roughness:.12, metalness:.38 }));
+  windscreen.position.set(L*.29, H*.60, 0); windscreen.rotation.z = -THREE.MathUtils.degToRad(32); windscreen.userData = group.userData; group.add(windscreen);
+
+  const fork1 = new THREE.Mesh(new THREE.BoxGeometry(L*.03, H*.34, W*.03), createMaterial({ color:0xcbd5e1, roughness:.35, metalness:.62 }));
+  fork1.position.set(L*.26, H*.34, W*.05); fork1.rotation.z = -THREE.MathUtils.degToRad(24); fork1.userData = group.userData; group.add(fork1);
+  const fork2 = fork1.clone(); fork2.position.z = -W*.05; fork2.userData = group.userData; group.add(fork2);
+
+  const swing = new THREE.Mesh(new THREE.BoxGeometry(L*.22, H*.05, W*.04), createMaterial({ color:0xcbd5e1, roughness:.35, metalness:.55 }));
+  swing.position.set(-L*.17, H*.28, 0); swing.rotation.z = THREE.MathUtils.degToRad(17); swing.userData = group.userData; group.add(swing);
+
+  const handle = new THREE.Mesh(new THREE.BoxGeometry(L*.10, H*.03, W*.44), createMaterial({ color:0x111827, roughness:.55, metalness:.22 }));
+  handle.position.set(L*.24, H*.61, 0); handle.rotation.x = THREE.MathUtils.degToRad(7); handle.rotation.z = -THREE.MathUtils.degToRad(10); handle.userData = group.userData; group.add(handle);
+
+  const exhaust = new THREE.Mesh(new THREE.CylinderGeometry(H*.03, H*.03, L*.18, 12), createMaterial({ color:0x94a3b8, roughness:.3, metalness:.72 }));
+  exhaust.rotation.z = Math.PI / 2; exhaust.position.set(-L*.03, H*.35, -W*.16); exhaust.userData = group.userData; group.add(exhaust);
+}
+
 function makeCameraMesh(c){
   const selected=state.selected.kind==='camera'&&state.selected.id===c.id,p=CAMERA_COLOR_PRESETS[c.colorKey]||CAMERA_COLOR_PRESETS.red,g=new THREE.Group(); g.userData={kind:'camera',id:c.id}; const bc=selected?lightHex(p.body,.22):p.body;
   const body=new THREE.Mesh(new THREE.BoxGeometry(1.8,.8,.9),new THREE.MeshStandardMaterial({color:bc,metalness:.25,roughness:.45,emissive:selected?0x334155:0})); body.position.y=2.6; body.userData=g.userData; g.add(body);
@@ -198,7 +319,7 @@ function makeCameraMesh(c){
   const pole=new THREE.Mesh(new THREE.CylinderGeometry(.09,.09,2.2,12),new THREE.MeshStandardMaterial({color:bc})); pole.position.y=1.45; pole.userData=g.userData; g.add(pole);
   const ring=new THREE.Mesh(new THREE.CylinderGeometry(.55,.65,.12,18),new THREE.MeshStandardMaterial({color:selected?0xffffff:p.body})); ring.position.y=.06; ring.userData=g.userData; g.add(ring);
 
-  // V1.11：顯示鏡頭實際可見範圍的單色光影，並依牆柱 / 車機車遮擋裁切缺角。
+  // V1.14：顯示鏡頭實際可見範圍的單色光影，並依牆柱 / 車機車遮擋裁切缺角。
   const dist=occludedDistances(c);
   const shape=new THREE.Shape();
   shape.moveTo(0,0);
@@ -212,7 +333,7 @@ function makeCameraMesh(c){
   const contour=new THREE.Line(new THREE.BufferGeometry().setFromPoints(contourPts),new THREE.LineBasicMaterial({color:p.line,transparent:true,opacity:.95})); contour.userData=g.userData; contour.renderOrder=4; g.add(contour);
   const sideData=[dist[0],dist[dist.length-1]],sidePts=[]; sideData.forEach(({a,d})=>sidePts.push(new THREE.Vector3(0,.11,0),new THREE.Vector3(Math.cos(a)*d,.11,-Math.sin(a)*d)));
   const sides=new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(sidePts),new THREE.LineBasicMaterial({color:p.line,transparent:true,opacity:.88})); sides.userData=g.userData; sides.renderOrder=4; g.add(sides);
-  addBlueBalloon(g,c);
+  addSpecialMarker(g,c);
   g.position.set(c.x,0,c.z); g.rotation.y=-THREE.MathUtils.degToRad(c.yaw); return g;
 }
 function pathOffsetPairs(points,half,closed){
@@ -255,25 +376,8 @@ function makeModuleMesh(m){
   const sel=state.selected.kind==='module'&&state.selected.id===m.id,isWall=isWallModule(m),height=metersToWorld(m.height||3),g=new THREE.Group(); g.userData={kind:'module',id:m.id};
 
   if(m.type==='car' || m.type==='motorcycle'){
-    const footprintLen=metersToWorld(m.length|| (m.type==='car'?4.6:2.0));
-    const footprintWid=metersToWorld(m.width|| (m.type==='car'?1.9:.8));
-    const baseH=metersToWorld(m.type==='car'?1.4:1.1);
-    const bodyColor=sel?0xfde68a:(m.type==='car'?0x94a3b8:0x60a5fa);
-    const main=new THREE.Mesh(new THREE.BoxGeometry(footprintLen, baseH*.45, footprintWid), new THREE.MeshStandardMaterial({color:bodyColor,roughness:.42,metalness:.18,emissive:sel?0x43380c:0x000000}));
-    main.position.y=baseH*.28; main.userData=g.userData; g.add(main);
-    const topLen=footprintLen*(m.type==='car' ? .52 : .42);
-    const topWid=footprintWid*(m.type==='car' ? .72 : .55);
-    const topH=baseH*(m.type==='car' ? .28 : .18);
-    const cabin=new THREE.Mesh(new THREE.BoxGeometry(topLen, topH, topWid), new THREE.MeshStandardMaterial({color:m.type==='car'?0xe2e8f0:0xc7d2fe,roughness:.32,metalness:.25,transparent:true,opacity:.92}));
-    cabin.position.set(m.type==='car'?-footprintLen*.03:0, baseH*.56, 0); cabin.userData=g.userData; g.add(cabin);
-    const wheelR=metersToWorld(m.type==='car' ? .34 : .22), wheelT=metersToWorld(m.type==='car' ? .22 : .10);
-    const wheelGeo=new THREE.CylinderGeometry(wheelR,wheelR,wheelT,14); const wheelMat=new THREE.MeshStandardMaterial({color:0x111827,roughness:.8});
-    const wheelPos = m.type==='car'
-      ? [[ footprintLen*.28, wheelR,  footprintWid*.42],[ footprintLen*.28, wheelR,-footprintWid*.42],[-footprintLen*.28,wheelR, footprintWid*.42],[-footprintLen*.28,wheelR,-footprintWid*.42]]
-      : [[ footprintLen*.22, wheelR,  footprintWid*.34],[ footprintLen*.22, wheelR,-footprintWid*.34],[-footprintLen*.22,wheelR, footprintWid*.34],[-footprintLen*.22,wheelR,-footprintWid*.34]];
-    wheelPos.forEach(([x,y,z])=>{const wheel=new THREE.Mesh(wheelGeo,wheelMat); wheel.rotation.z=Math.PI/2; wheel.position.set(x,y,z); wheel.userData=g.userData; g.add(wheel);});
-    const edge = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(footprintLen, baseH*.45, footprintWid),25), new THREE.LineBasicMaterial({color:sel?0xffffff:0xdbeafe,transparent:true,opacity:.3}));
-    edge.position.copy(main.position); edge.userData=g.userData; g.add(edge);
+    if(m.type==='car') buildSportsCarGroup(g, m, sel);
+    else buildSportMotorcycleGroup(g, m, sel);
     g.position.set(m.x,0,m.z); g.rotation.y=-THREE.MathUtils.degToRad(m.angle||0); return g;
   }
 
@@ -320,7 +424,7 @@ function refreshUI(){
 }
 function updateCameraEditor(){ const c=selCamera(); if(!c){els.noCamera.classList.remove('hidden');els.cameraForm.classList.add('hidden');return;} els.noCamera.classList.add('hidden');els.cameraForm.classList.remove('hidden');camInputs.name.value=c.name;camInputs.lens.value=String(c.lens);camInputs.lensFov.value=`${LENS_PRESETS[String(c.lens)]?.fov??c.fov}°`;camInputs.color.value=c.colorKey;camInputs.colorLabel.value=c.colorLabel;camInputs.fixed.checked=!!c.fixed;camInputs.fov.value=c.fov;camInputs.fovOut.value=`${c.fov}°`;camInputs.range.value=c.range;camInputs.rangeOut.value=`${c.range}m`;camInputs.yaw.value=c.yaw;camInputs.yawOut.value=`${c.yaw}°`;camInputs.note.value=c.note||''; }
 function wallPathTotalMeters(m){ if(m.type!=='wallpath'||!Array.isArray(m.points)||m.points.length<2)return Number(m.length||0); let total=0;const count=m.closed?m.points.length:m.points.length-1;for(let i=0;i<count;i++){const a=m.points[i],b=m.points[(i+1)%m.points.length];total+=Math.hypot(b.x-a.x,b.z-a.z);}return +worldToMeters(total).toFixed(3); }
-function updateModuleEditor(){ const m=selModule(); if(!m){els.noModule.classList.remove('hidden');els.moduleForm.classList.add('hidden');return;} const wall=isWallModule(m),path=m.type==='wallpath'; els.noModule.classList.add('hidden');els.moduleForm.classList.remove('hidden');modInputs.name.value=m.name;modInputs.type.value=moduleTypeLabel(m);modInputs.length.value=path?wallPathTotalMeters(m):m.length;modInputs.length.disabled=path;modInputs.width.value=m.width??.8;modInputs.height.value=m.height;modInputs.thickness.value=m.thickness??.2;modInputs.angle.value=m.angle||0;modInputs.angleOut.value=path?'連續路徑':`${m.angle||0}°`;modInputs.angle.disabled=path;modInputs.fixed.checked=!!m.fixed;modInputs.widthWrap.classList.toggle('hidden',wall);modInputs.thicknessWrap.classList.toggle('hidden',!wall); }
+function updateModuleEditor(){ const m=selModule(); if(!m){els.noModule.classList.remove('hidden');els.moduleForm.classList.add('hidden');return;} const wall=isWallModule(m),path=m.type==='wallpath',vehicle=isVehicleModule(m); els.noModule.classList.add('hidden');els.moduleForm.classList.remove('hidden');modInputs.name.value=m.name;modInputs.type.value=moduleTypeLabel(m);modInputs.length.value=path?wallPathTotalMeters(m):m.length;modInputs.length.disabled=path;modInputs.width.value=m.width??.8;modInputs.height.value=m.height;modInputs.thickness.value=m.thickness??.2;modInputs.angle.value=m.angle||0;modInputs.angleOut.value=path?'連續路徑':`${m.angle||0}°`;modInputs.angle.disabled=path;modInputs.fixed.checked=!!m.fixed; modInputs.occludes.checked = m.occludes !== false; modInputs.occludeWrap.classList.toggle('hidden', !vehicle); modInputs.widthWrap.classList.toggle('hidden',wall);modInputs.thicknessWrap.classList.toggle('hidden',!wall); }
 function updateItemList(){
   let items=[];
   if(state.listFilter==='camera'||state.listFilter==='all') items.push(...currentCameras().map(d=>({kind:'camera',d})));
@@ -338,7 +442,7 @@ function updateItemList(){
     const wall=isWallModule(d);
     const cls=wall?'wall':(d.type==='column'?'column':'project');
     const tag=wall?'WALL':(d.type==='column'?'COLUMN':(d.type==='car'?'CAR':'MOTO'));
-    return `<div class="item ${sel}" data-kind="module" data-id="${esc(d.id)}"><div><strong>${esc(d.name)}</strong><small>${moduleTypeLabel(d)}・${d.fixed?'固定':'可移動'}</small></div><span class="pill ${cls}">${tag}</span></div>`;
+    return `<div class="item ${sel}" data-kind="module" data-id="${esc(d.id)}"><div><strong>${esc(d.name)}</strong><small>${moduleTypeLabel(d)}・${d.fixed?'固定':'可移動'}${isVehicleModule(d)?`・${d.occludes===false?'不遮擋視角':'遮擋視角'}`:''}</small></div><span class="pill ${cls}">${tag}</span></div>`;
   }).join('');
   els.itemList.querySelectorAll('.item').forEach(el=>el.onclick=()=>setSelected(el.dataset.kind,el.dataset.id));
 }
@@ -349,6 +453,7 @@ function mutateModule(fn){const m=selModule();if(!m)return;fn(m);saveWorking();r
 camInputs.name.oninput=()=>mutateCamera(c=>c.name=camInputs.name.value); camInputs.lens.onchange=()=>mutateCamera(c=>{c.lens=camInputs.lens.value;const p=LENS_PRESETS[c.lens];c.fov=p.fov;c.range=p.range;}); camInputs.color.onchange=()=>mutateCamera(c=>{const old=CAMERA_COLOR_PRESETS[c.colorKey]?.label;if(!c.colorLabel||c.colorLabel===old)c.colorLabel=CAMERA_COLOR_PRESETS[camInputs.color.value]?.label||c.colorLabel;c.colorKey=camInputs.color.value;}); camInputs.colorLabel.oninput=()=>mutateCamera(c=>c.colorLabel=camInputs.colorLabel.value||CAMERA_COLOR_PRESETS[c.colorKey].label); camInputs.fixed.onchange=()=>mutateCamera(c=>c.fixed=camInputs.fixed.checked); camInputs.fov.oninput=()=>mutateCamera(c=>c.fov=+camInputs.fov.value); camInputs.range.oninput=()=>mutateCamera(c=>c.range=+camInputs.range.value); camInputs.yaw.oninput=()=>mutateCamera(c=>c.yaw=+camInputs.yaw.value); camInputs.note.oninput=()=>mutateCamera(c=>c.note=camInputs.note.value);
 $('deleteCamBtn').onclick=()=>{const c=selCamera();if(!c)return;state.cameras[currentKey()]=currentCameras().filter(x=>x.id!==c.id);clearSelection();saveWorking();renderObjects();refreshUI();};
 modInputs.name.oninput=()=>mutateModule(m=>m.name=modInputs.name.value);modInputs.length.oninput=()=>mutateModule(m=>{if(m.type!=='wallpath')m.length=Math.max(.2,+modInputs.length.value||.2);});modInputs.width.oninput=()=>mutateModule(m=>m.width=Math.max(.2,+modInputs.width.value||.2));modInputs.height.oninput=()=>mutateModule(m=>m.height=Math.max(.2,+modInputs.height.value||.2));modInputs.thickness.oninput=()=>mutateModule(m=>m.thickness=Math.max(.05,+modInputs.thickness.value||.05));modInputs.angle.oninput=()=>mutateModule(m=>{if(m.type!=='wallpath')m.angle=+modInputs.angle.value;});modInputs.fixed.onchange=()=>mutateModule(m=>m.fixed=modInputs.fixed.checked);
+modInputs.occludes.onchange=()=>mutateModule(m=>{ if(isVehicleModule(m)) m.occludes = modInputs.occludes.checked; });
 $('deleteModuleBtn').onclick=()=>{const m=selModule();if(!m)return;state.modules[currentKey()]=currentModules().filter(x=>x.id!==m.id);clearSelection();saveWorking();renderObjects();refreshUI();}; $('clearModuleBtn').onclick=()=>{if(currentModules().length&&confirm(`確定清除 ${currentFloorMeta()?.name||''} 全部模組？`)){state.modules[currentKey()]=[];clearSelection();saveWorking();renderObjects();refreshUI();}};
 
 function setAddMode(mode){ state.addMode=state.addMode===mode?null:mode; if(mode!=='wall')draftWall={points:[],mousePoint:null}; controls.enabled=!state.addMode&&!dragState; const txt={camera:'請在圖面點一下新增鏡頭',column:'請在圖面點一下新增柱子',car:'請在圖面點一下新增汽車',motorcycle:'請在圖面點一下新增機車',wall:'連續牆體：依序點選路徑；點回第一點自動封閉完成，Enter 結束開放牆，Esc 取消',calibrate:'實尺校正：請依序點選兩個已知距離的點'}; els.addHint.classList.toggle('hidden',!state.addMode);els.addHint.textContent=txt[state.addMode]||''; $('addCameraBtn').classList.toggle('active',state.addMode==='camera');$('addWallBtn').classList.toggle('active',state.addMode==='wall');$('drawerAddWallBtn').classList.toggle('active',state.addMode==='wall');$('addColumnBtn').classList.toggle('active',state.addMode==='column');$('drawerAddColumnBtn').classList.toggle('active',state.addMode==='column'); $('addCarBtn').classList.toggle('active',state.addMode==='car');$('drawerAddCarBtn').classList.toggle('active',state.addMode==='car'); $('addMotorBtn').classList.toggle('active',state.addMode==='motorcycle');$('drawerAddMotorBtn').classList.toggle('active',state.addMode==='motorcycle'); renderDrafts(); }
@@ -361,8 +466,8 @@ renderer.domElement.addEventListener('pointerdown',evt=>{
   const w=eventWorld(evt);
   if(state.addMode==='camera'){if(!w)return;const p=LENS_PRESETS['4'],n=currentCameras().length+1,c={id:uid('cam'),name:`CAM-${currentFloorMeta()?.id||'F'}-${String(n).padStart(2,'0')}`,x:w.x,z:w.z,lens:'4',fov:p.fov,range:p.range,yaw:0,note:'',colorKey:'red',colorLabel:'原建置',fixed:false};currentCameras().push(c);state.selected={kind:'camera',id:c.id};saveWorking();setAddMode(null);renderObjects();refreshUI();return;}
   if(state.addMode==='column'){if(!w)return;const n=currentModules().filter(x=>x.type==='column').length+1,m={id:uid('col'),type:'column',name:`COL-${currentFloorMeta()?.id||'F'}-${String(n).padStart(2,'0')}`,x:w.x,z:w.z,length:.8,width:.8,height:3,thickness:.8,angle:0,fixed:false};currentModules().push(m);state.selected={kind:'module',id:m.id};saveWorking();setAddMode(null);renderObjects();refreshUI();return;}
-  if(state.addMode==='car'){if(!w)return;const n=currentModules().filter(x=>x.type==='car').length+1,m={id:uid('car'),type:'car',name:`CAR-${currentFloorMeta()?.id||'F'}-${String(n).padStart(2,'0')}`,x:w.x,z:w.z,length:4.6,width:1.9,height:1.4,thickness:1.9,angle:0,fixed:false};currentModules().push(m);state.selected={kind:'module',id:m.id};saveWorking();setAddMode(null);renderObjects();refreshUI();return;}
-  if(state.addMode==='motorcycle'){if(!w)return;const n=currentModules().filter(x=>x.type==='motorcycle').length+1,m={id:uid('moto'),type:'motorcycle',name:`MOTO-${currentFloorMeta()?.id||'F'}-${String(n).padStart(2,'0')}`,x:w.x,z:w.z,length:2.0,width:0.8,height:1.1,thickness:0.8,angle:0,fixed:false};currentModules().push(m);state.selected={kind:'module',id:m.id};saveWorking();setAddMode(null);renderObjects();refreshUI();return;}
+  if(state.addMode==='car'){if(!w)return;const n=currentModules().filter(x=>x.type==='car').length+1,m={id:uid('car'),type:'car',name:`CAR-${currentFloorMeta()?.id||'F'}-${String(n).padStart(2,'0')}`,x:w.x,z:w.z,length:4.6,width:1.9,height:1.4,thickness:1.9,angle:0,fixed:false,occludes:true};currentModules().push(m);state.selected={kind:'module',id:m.id};saveWorking();setAddMode(null);renderObjects();refreshUI();return;}
+  if(state.addMode==='motorcycle'){if(!w)return;const n=currentModules().filter(x=>x.type==='motorcycle').length+1,m={id:uid('moto'),type:'motorcycle',name:`MOTO-${currentFloorMeta()?.id||'F'}-${String(n).padStart(2,'0')}`,x:w.x,z:w.z,length:2.0,width:0.8,height:1.1,thickness:0.8,angle:0,fixed:false,occludes:true};currentModules().push(m);state.selected={kind:'module',id:m.id};saveWorking();setAddMode(null);renderObjects();refreshUI();return;}
   if(state.addMode==='wall'){
     if(!w)return;
     if(draftWall.points.length>=3 && screenDistanceToWorldPoint(evt,draftWall.points[0])<=20){ finalizeWall(true); return; }
@@ -428,5 +533,19 @@ function loadProject(id){const s=ensureStore(),p=s.projects.find(x=>x.id===id);i
 function deleteProject(id){const s=ensureStore(),p=s.projects.find(x=>x.id===id);if(!p)return;if(!confirm(`確定刪除專案「${p.name}」？`))return;s.projects=s.projects.filter(x=>x.id!==id);setStore(s);renderStore();}
 $('exportProjectBtn').onclick=async()=>{const name=els.projectName.value.trim()||`CCTV專案-${new Date().toISOString().slice(0,10)}`,payload={format:'UTOP-CCTV-3D-PROJECT',schemaVersion:4,appVersion:APP_VERSION,company:'昱拓弱電有限公司',name,exportedAt:new Date().toISOString(),data:buildProjectPayload()},blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),filename=`${name}.utop3d`;if(window.showSaveFilePicker){try{const h=await window.showSaveFilePicker({suggestedName:filename,types:[{description:'UTOP 3D Project',accept:{'application/json':['.utop3d','.json']}}]}),w=await h.createWritable();await w.write(blob);await w.close();els.statusText.textContent=`已匯出：${filename}`;return;}catch(e){if(e?.name!=='AbortError')console.warn(e);}}const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;a.click();URL.revokeObjectURL(a.href);};$('importProjectBtn').onclick=()=>$('importProjectFile').click();$('importProjectFile').onchange=async e=>{const file=e.target.files?.[0];if(!file)return;try{const j=JSON.parse(await file.text());applyPayload(j.data||j);els.projectName.value=j.name||file.name.replace(/\.(utop3d|json)$/i,'');els.statusText.textContent=`已匯入：${file.name}`;}catch(err){console.warn(err);alert('匯入失敗，檔案格式不正確。');}e.target.value='';};
 
-function resize(){const w=els.viewer.clientWidth,h=els.viewer.clientHeight;camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h,false);}window.addEventListener('resize',resize);function animate(){requestAnimationFrame(animate);controls.update();renderer.render(scene,camera);}
+function resize(){const w=els.viewer.clientWidth,h=els.viewer.clientHeight;camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h,false);}window.addEventListener('resize',resize);
+function animate(){
+  requestAnimationFrame(animate);
+  const t = performance.now() * 0.004;
+  scene.traverse(obj => {
+    if(obj.userData?.blinkType === "invincible-star") {
+      const pulse = 0.78 + 0.22 * (0.5 + 0.5 * Math.sin(t * 2.4));
+      obj.scale.setScalar(pulse);
+      obj.rotation.z = Math.sin(t * 0.9) * 0.12;
+      if(obj.material){ obj.material.emissiveIntensity = 0.7 + 0.7 * (0.5 + 0.5 * Math.sin(t * 5.2)); }
+    }
+  });
+  controls.update();
+  renderer.render(scene,camera);
+}
 buildFloor();renderObjects();refreshUI();renderStore();resize();animate();

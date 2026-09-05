@@ -13,12 +13,12 @@
       <div>
         <div class="brand-row">
           <h1>昱拓弱電有限公司｜社區地下室 CCTV 3D 規劃</h1>
-          <span class="version-badge" id="versionBadge">V1.11</span>
+          <span class="version-badge" id="versionBadge">V1.14</span>
         </div>
-        <p>社區資料夾・連續牆體・可視光影・車機車遮擋・提示氣球</p>
+        <p>社區資料夾・連續牆體・可視光影・車輛遮擋開關・無敵星提示</p>
       </div>
     </div>
-    <div class="status"><span class="dot"></span><span id="statusText">B1 模型已載入｜版本 V1.11</span></div>
+    <div class="status"><span class="dot"></span><span id="statusText">B1 模型已載入｜版本 V1.14</span></div>
   </header>
 
   <nav class="floor-tabs" aria-label="地下室樓層">
@@ -57,7 +57,7 @@
         <span>滾輪縮放</span>
         <span>牆體：連續點位；點回起點自動完成，Enter 可結束開放牆，Esc 取消</span>
         <span>視角：顯示實際可見光影範圍，牆柱與車機車遮擋不穿透</span><span>圖紙比例：X/Z 同比例映射＋兩點實尺校正</span>
-        <span>版本：<b id="footerVersionInline">V1.11</b></span>
+        <span>版本：<b id="footerVersionInline">V1.14</b></span>
       </div>
     </section>
 
@@ -70,7 +70,7 @@
           </div>
           <span class="badge">互動模型</span>
         </div>
-        <p class="muted">目前 B1、B2 圖面歸類在「樺龍潮+ 社區」。本版讓鏡頭可視範圍加入單色光影，更容易辨識；牆體維持連續牆面生成；新增汽車與機車模組，當鏡頭照到車輛時也會形成遮擋缺角；藍色鏡頭上方會顯示 4 公尺高的藍色提示氣球。</p>
+        <p class="muted">目前 B1、B2 圖面歸類在「樺龍潮+ 社區」。本版把鏡頭藍色與黃色分類對調：增設改為黃色；原本的藍色提示氣球也改成 7 公尺高的黃色無敵星提示，並加入閃爍效果。汽車與機車仍可設定是否遮擋鏡頭視角。</p>
       </section>
 
       <section class="panel-section stats-grid">
@@ -155,7 +155,7 @@
           <button id="drawerAddCarBtn" class="mini-btn accent">新增汽車</button>
           <button id="drawerAddMotorBtn" class="mini-btn accent2">新增機車</button>
         </div>
-        <div id="noModule" class="empty-state">尚未選取模組。<br>可直接拖曳移動；若勾選固定，則不會再被拖曳。</div>
+        <div id="noModule" class="empty-state">尚未選取模組。<br>可直接拖曳移動；若勾選固定，則不會再被拖曳。汽車與機車可另設定是否遮擋鏡頭視角。黃色「增設」鏡頭會在上方顯示 7m 無敵星提示。</div>
         <div id="moduleForm" class="module-form hidden">
           <label>模組名稱<input id="modName" type="text" /></label>
           <label>模組類型<input id="modType" type="text" disabled /></label>
@@ -169,6 +169,7 @@
           </div>
           <label>角度<input id="modAngle" type="range" min="0" max="359" value="0" /><output id="modAngleOut">0°</output></label>
           <label class="checkbox-row"><input id="modFixed" type="checkbox" /> 固定位置（勾選後不可拖曳移動）</label>
+          <label id="modOccludeWrap" class="checkbox-row hidden"><input id="modOccludes" type="checkbox" checked /> 遮擋鏡頭視角（取消勾選＝鏡頭可越過車輛看見後方）</label>
           <div class="form-actions"><button id="deleteModuleBtn" class="danger-button">刪除此模組</button></div>
         </div>
       </section>
@@ -190,7 +191,7 @@
             </label>
             <label>建議水平視角<input id="camLensFov" type="text" disabled /></label>
           </div>
-          <div class="field-note">焦距越小，視角越廣；焦距越大，視角越窄。視角會以單色光影顯示鏡頭真正看得到的畫面範圍；牆、柱、汽車與機車都會造成遮擋。藍色「增設」鏡頭會在 4m 高度顯示藍色提示氣球。</div>
+          <div class="field-note">焦距越小，視角越廣；焦距越大，視角越窄。視角會以單色光影顯示鏡頭真正看得到的畫面範圍；牆、柱、汽車與機車都會造成遮擋。黃色「增設」鏡頭會在 7m 高度顯示黃色無敵星提示，並會閃爍。</div>
           <div class="two-col">
             <label>顏色分類<select id="camColor"></select></label>
             <label>分類名稱<input id="camColorLabel" type="text" placeholder="例：原建置 / 增設 / 故障" /></label>
@@ -224,7 +225,7 @@
     </aside>
   </main>
 
-  <footer class="footer-note">V1.11｜昱拓弱電有限公司｜鏡頭實際可視範圍｜連續牆體自動封閉｜藍色鏡頭 4m 提示氣球｜社區 / 樓層管理</footer>
+  <footer class="footer-note">V1.14｜昱拓弱電有限公司｜鏡頭實際可視範圍｜連續牆體自動封閉｜藍色鏡頭 4m 提示氣球｜社區 / 樓層管理</footer>
 
   <script type="importmap">
   {
