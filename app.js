@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-const APP_VERSION = 'V1.27';
+const APP_VERSION = 'V1.28';
 const DEFAULT_COMMUNITY_ID = 'hualong-chao-plus';
 const CATALOG_KEY = 'cctv3d-site-catalog-v1-24';
 const WORKING_KEY = 'cctv3d-working-v1-24';
@@ -742,11 +742,71 @@ function renderCloudProjects(){
 async function refreshCloudProjects(forceApi=false){
   try{
     if(forceApi){activeApiUrl='';localStorage.removeItem(API_CACHE_KEY);}
-    setCloudStatus(false,'API 來源：工作表1!B1｜連線中…');setStartupStep('ping','loading','正在測試 Apps Script API…');
-    const ping=await apiGet('ping');if(!ping?.ok)throw new Error(ping?.message||'API ping 失敗');setStartupStep('ping','done','Apps Script API 連線正常');setStartupStep('cloud','loading','正在讀取 Google Sheets 雲端專案清單…');
-    const data=await apiGet('listProjects');if(!data?.ok)throw new Error(data?.message||'讀取專案清單失敗');cloudProjects=Array.isArray(data.projects)?data.projects:[];const folderData=await apiGet('listFolders');if(!folderData?.ok)throw new Error(folderData?.message||'讀取雲端資料夾失敗');cloudFolders=Array.isArray(folderData.folders)?folderData.folders:[];renderCloudFolderOptions();setCloudStatus(true,`API 來源：工作表1!B1｜連線正常｜${cloudProjects.length} 個雲端專案`);setStartupStep('cloud','done',`已載入 ${cloudProjects.length} 個雲端專案 / ${cloudFolders.length} 個資料夾`);renderCloudProjects();
+    setCloudStatus(false,'API 來源：工作表1!B1｜連線中…');
+    setStartupStep('ping','loading','正在測試 Apps Script API…');
+
+    const ping=await apiGet('ping');
+    if(!ping?.ok) throw new Error(ping?.message||'API ping 失敗');
+
+    const apiVersion=String(ping.apiVersion||'舊版');
+    setStartupStep('ping','done',`Apps Script API 連線正常｜API ${apiVersion}`);
+
+    setStartupStep('cloud','loading','正在讀取 Google Sheets 雲端專案清單…');
+    const data=await apiGet('listProjects');
+    if(!data?.ok) throw new Error(data?.message||'讀取專案清單失敗');
+    cloudProjects=Array.isArray(data.projects)?data.projects:[];
+
+    let folderMode='normal';
+    try{
+      const folderData=await apiGet('listFolders');
+      if(folderData?.ok){
+        cloudFolders=Array.isArray(folderData.folders)?folderData.folders:[];
+      }else{
+        const msg=String(folderData?.message||'');
+        if(msg.includes('未知 action')&&msg.includes('listFolders')){
+          folderMode='legacy';
+          cloudFolders=[{folderId:'root',name:'我的專案',updatedAt:''}];
+        }else{
+          throw new Error(folderData?.message||'讀取雲端資料夾失敗');
+        }
+      }
+    }catch(folderErr){
+      const msg=String(folderErr?.message||folderErr);
+      if(msg.includes('未知 action')&&msg.includes('listFolders')){
+        folderMode='legacy';
+        cloudFolders=[{folderId:'root',name:'我的專案',updatedAt:''}];
+      }else{
+        throw folderErr;
+      }
+    }
+
+    renderCloudFolderOptions();
+
+    if(folderMode==='legacy'){
+      setCloudStatus(true,`雲端基本連線正常｜${cloudProjects.length} 個專案｜Apps Script API 需更新`);
+      setStartupStep('cloud','done',`已載入 ${cloudProjects.length} 個雲端專案｜目前使用舊 API 相容模式`);
+      renderCloudProjects();
+      // 不把整個網站判定為失敗；只有資料夾新增/刪除功能暫時不可用。
+      const nf=$('newFolderBtn'),df=$('deleteFolderBtn');
+      if(nf) nf.disabled=true;
+      if(df) df.disabled=true;
+      return;
+    }
+
+    const nf=$('newFolderBtn'),df=$('deleteFolderBtn');
+    if(nf) nf.disabled=false;
+    if(df) df.disabled=false;
+    setCloudStatus(true,`API 來源：工作表1!B1｜連線正常｜${cloudProjects.length} 個雲端專案`);
+    setStartupStep('cloud','done',`已載入 ${cloudProjects.length} 個雲端專案 / ${cloudFolders.length} 個資料夾`);
+    renderCloudProjects();
   }catch(err){
-    console.warn(err);setStartupStep('ping','error',err.message);setStartupStep('cloud','error','雲端專案清單未載入');setCloudStatus(false,`API 來源：工作表1!B1｜${err.message}`);els.projectList.innerHTML='<div class="empty-list">雲端連線失敗，請確認工作表1!B1、分享權限與 Apps Script 部署權限。</div>';els.savedCount.textContent='0 筆';showErrorModal('Google Sheets 雲端連線失敗',err,'工作表1!B1 / Apps Script API');
+    console.warn(err);
+    setStartupStep('ping','error',err.message);
+    setStartupStep('cloud','error','雲端專案清單未載入');
+    setCloudStatus(false,`API 來源：工作表1!B1｜${err.message}`);
+    els.projectList.innerHTML='<div class="empty-list">雲端連線失敗，請確認工作表1!B1、分享權限與 Apps Script 部署權限。</div>';
+    els.savedCount.textContent='0 筆';
+    showErrorModal('Google Sheets 雲端連線失敗',err,'工作表1!B1 / Apps Script API');
   }
 }
 function renderStore(){renderFolderOptions();renderCloudFolderOptions();renderLocalProjects();renderCloudProjects();}
