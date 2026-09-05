@@ -174,3 +174,6 @@ body.has-critical-error{
   opacity:.88;
   transform:translateY(-2px);
 }
+
+/* V1.33 */
+.project-actions button[data-act='drive']{font-weight:700;}

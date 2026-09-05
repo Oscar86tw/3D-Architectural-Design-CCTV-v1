@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-const APP_VERSION = 'V1.31';
+const APP_VERSION = 'V1.33';
 const DEFAULT_COMMUNITY_ID = 'hualong-chao-plus';
 const CATALOG_KEY = 'cctv3d-site-catalog-v1-24';
 const WORKING_KEY = 'cctv3d-working-v1-24';
@@ -740,8 +740,18 @@ function renderCloudProjects(){
   const folder=selectedCloudFolder();
   const list=cloudProjects.filter(p=>(p.folder||'我的專案')===folder.name).sort((a,b)=>new Date(b.updatedAt)-new Date(a.updatedAt));
   els.savedCount.textContent=`${list.length} 筆`;
-  els.projectList.innerHTML=list.length?list.map(p=>`<div class="item"><div><strong>${p.locked?'🔒 ':''}${esc(p.projectName)}</strong><small>${esc(p.community||'')}・${esc(p.floor||'')}・${esc(p.folder||'我的專案')}・${esc(p.version||'')}・${p.locked?'已鎖定':'未鎖定'}</small></div><div class="project-actions"><button data-act="load" data-id="${esc(p.projectId)}">開啟</button><button data-act="lock" data-id="${esc(p.projectId)}">${p.locked?'🔓 解鎖':'🔒 鎖定'}</button><button class="danger" data-act="delete" data-id="${esc(p.projectId)}" ${p.locked?'disabled':''}>刪除</button></div></div>`).join(''):'<div class="empty-list">此資料夾尚無雲端專案</div>';
-  els.projectList.querySelectorAll('button').forEach(b=>b.onclick=e=>{e.stopPropagation();if(b.dataset.act==='load')loadProjectCloud(b.dataset.id);else if(b.dataset.act==='lock')toggleProjectLockCloud(b.dataset.id);else deleteProjectCloud(b.dataset.id);});
+  els.projectList.innerHTML=list.length?list.map(p=>{
+    const driveOk=!!p.driveFileId;
+    const driveUrl=p.driveFileUrl||'';
+    return `<div class="item"><div><strong>${p.locked?'🔒 ':''}${esc(p.projectName)}</strong><small>${esc(p.community||'')}・${esc(p.floor||'')}・${esc(p.folder||'我的專案')}・${esc(p.version||'')}・${p.locked?'已鎖定':'未鎖定'}・${driveOk?'Drive 已建立':'Drive 未建立'}</small></div><div class="project-actions"><button data-act="load" data-id="${esc(p.projectId)}">開啟</button>${driveUrl?`<button data-act="drive" data-url="${esc(driveUrl)}">Drive</button>`:''}<button data-act="lock" data-id="${esc(p.projectId)}">${p.locked?'🔓 解鎖':'🔒 鎖定'}</button><button class="danger" data-act="delete" data-id="${esc(p.projectId)}" ${p.locked?'disabled':''}>刪除</button></div></div>`;
+  }).join(''):'<div class="empty-list">此資料夾尚無雲端專案</div>';
+  els.projectList.querySelectorAll('button').forEach(b=>b.onclick=e=>{
+    e.stopPropagation();
+    if(b.dataset.act==='load') loadProjectCloud(b.dataset.id);
+    else if(b.dataset.act==='drive'&&b.dataset.url) window.open(b.dataset.url,'_blank','noopener');
+    else if(b.dataset.act==='lock') toggleProjectLockCloud(b.dataset.id);
+    else deleteProjectCloud(b.dataset.id);
+  });
 }
 async function refreshCloudProjects(forceApi=false){
   try{
@@ -753,7 +763,10 @@ async function refreshCloudProjects(forceApi=false){
     if(!ping?.ok) throw new Error(ping?.message||'API ping 失敗');
 
     const apiVersion=String(ping.apiVersion||'舊版');
-    setStartupStep('ping','done',`Apps Script API 連線正常｜API ${apiVersion}`);
+    if(ping.storage!=='Google Drive' || !ping.driveRootFolderId){
+      throw new Error(`目前 /exec 仍不是 Google Drive 雲端版 API（API ${apiVersion}）`);
+    }
+    setStartupStep('ping','done',`Apps Script API 連線正常｜Drive API ${apiVersion}`);
 
     setStartupStep('cloud','loading','正在讀取 Google Sheets 雲端專案清單…');
     const data=await apiGet('listProjects');
@@ -945,6 +958,7 @@ $('saveProjectBtn').onclick=async()=>{
     els.statusText.textContent=`正在儲存到 Google Drive：${name}…`;
     const result=await apiPost({action:'saveProject',projectId:existing?.projectId||'',community,floor,folder,projectName:name,version:APP_VERSION,data:payload});
     if(!result?.ok)throw new Error(result?.message||'雲端儲存失敗');
+    if(!result.driveFileId)throw new Error('API 回傳成功，但沒有 Drive 檔案 ID；請確認 Apps Script 已部署 V1.33 並授權 Google Drive。');
     // 同步保留瀏覽器本機備份
     const s=ensureStore();let localFolder=s.folders.find(f=>f.name===folder);if(!localFolder){localFolder={id:uid('folder'),name:folder};s.folders.push(localFolder);}const folderId=localFolder.id;let lp=s.projects.find(x=>x.folderId===folderId&&x.name===name);if(lp){lp.data=payload;lp.updatedAt=Date.now();lp.version=APP_VERSION;}else{s.projects.push({id:result.projectId||uid('project'),folderId,name,data:payload,updatedAt:Date.now(),version:APP_VERSION,locked:!!existing?.locked});}setStore(s);
     els.statusText.textContent=`Google Drive 雲端儲存完成：${name}｜${APP_VERSION}`;await refreshCloudProjects();
