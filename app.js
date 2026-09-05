@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-const APP_VERSION = 'V1.33';
+const APP_VERSION = 'V1.34';
 const DEFAULT_COMMUNITY_ID = 'hualong-chao-plus';
 const CATALOG_KEY = 'cctv3d-site-catalog-v1-24';
 const WORKING_KEY = 'cctv3d-working-v1-24';
@@ -719,6 +719,7 @@ async function getApiUrlFromSheet(force=false){
     const res=await fetch(API_CONFIG_CSV_URL,{cache:'no-store'});
     if(!res.ok)throw new Error(`B1 讀取失敗 HTTP ${res.status}`);
     const url=parseCsvSingleCell(await res.text());
+    if(/\/dev(?:\?.*)?$/i.test(url))throw new Error('工作表1!B1 目前是 /dev 測試網址，請改成正式 /exec 網址');
     if(!/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec(?:\?.*)?$/i.test(url))throw new Error('工作表1!B1 不是有效的 Apps Script /exec 網址');
     activeApiUrl=url;localStorage.setItem(API_CACHE_KEY,url);setStartupStep('api','done','已取得目前有效 /exec 網址');return url;
   }catch(err){
