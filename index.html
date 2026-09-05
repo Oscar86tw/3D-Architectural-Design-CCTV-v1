@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>社區地下室 3D CCTV 規劃</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">3D</div>
+      <div>
+        <h1>社區地下室 CCTV 3D 規劃</h1>
+        <p>監視器位置・視野・死角說明</p>
+      </div>
+    </div>
+    <div class="status"><span class="dot"></span><span id="statusText">模型已載入</span></div>
+  </header>
+
+  <nav class="floor-tabs" aria-label="地下室樓層">
+    <button class="floor-tab active" data-floor="B1">B1 地下一層</button>
+    <button class="floor-tab" data-floor="B2">B2 地下二層</button>
+  </nav>
+
+  <main class="workspace">
+    <section class="viewer-card">
+      <div class="toolbar">
+        <div class="tool-group">
+          <button id="view3dBtn" class="tool active">3D 視角</button>
+          <button id="topViewBtn" class="tool">俯視圖</button>
+          <button id="resetViewBtn" class="tool">重設視角</button>
+        </div>
+        <div class="tool-group">
+          <button id="wallToggleBtn" class="tool active">立體牆體：開</button>
+          <button id="planToggleBtn" class="tool active">平面底圖：開</button>
+        </div>
+        <div class="tool-group camera-tools">
+          <button id="addCameraBtn" class="tool primary">＋ 新增鏡頭</button>
+          <button id="clearCameraBtn" class="tool danger ghost">清除本層鏡頭</button>
+        </div>
+      </div>
+
+      <div id="viewer" class="viewer" aria-label="3D 地下室檢視區">
+        <div id="addHint" class="add-hint hidden">請在圖面上點一下要安裝監視器的位置</div>
+        <div class="compass"><span>N</span><b>↑</b></div>
+        <div class="floor-chip" id="floorChip">B1</div>
+      </div>
+
+      <div class="viewer-help">
+        <span>左鍵旋轉</span><span>右鍵平移</span><span>滾輪縮放</span><span>新增鏡頭後點圖面定位</span>
+      </div>
+    </section>
+
+    <aside class="side-panel">
+      <section class="panel-section">
+        <div class="panel-title-row">
+          <div>
+            <p class="eyebrow">CURRENT FLOOR</p>
+            <h2 id="floorTitle">B1 地下一層</h2>
+          </div>
+          <span class="badge">1:150 原圖</span>
+        </div>
+        <p class="muted">以原始停車場平面圖作為 3D 地板基準，先建立樓層結構，再逐步放置鏡頭分析遮蔽與死角。</p>
+      </section>
+
+      <section class="panel-section stats-grid">
+        <div class="stat"><b id="cameraCount">0</b><span>本層鏡頭</span></div>
+        <div class="stat"><b id="selectedFov">—</b><span>選取 FOV</span></div>
+        <div class="stat"><b id="selectedRange">—</b><span>監看距離</span></div>
+      </section>
+
+      <section class="panel-section" id="cameraEditor">
+        <div class="section-heading">鏡頭設定</div>
+        <div id="noCamera" class="empty-state">尚未選取鏡頭。<br>按「＋ 新增鏡頭」後直接在圖面定位。</div>
+        <div id="cameraForm" class="camera-form hidden">
+          <label>鏡頭名稱<input id="camName" type="text" /></label>
+          <div class="two-col">
+            <label>水平視角 FOV<input id="camFov" type="range" min="35" max="140" value="90" /><output id="camFovOut">90°</output></label>
+            <label>監看距離<input id="camRange" type="range" min="6" max="35" value="18" /><output id="camRangeOut">18m</output></label>
+          </div>
+          <label>方向<input id="camYaw" type="range" min="0" max="359" value="0" /><output id="camYawOut">0°</output></label>
+          <label>安裝備註<textarea id="camNote" rows="3" placeholder="例：柱後方死角、車道轉角、電梯口"></textarea></label>
+          <div class="form-actions">
+            <button id="deleteCamBtn" class="danger-button">刪除此鏡頭</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel-section grow">
+        <div class="section-heading">鏡頭清單</div>
+        <div id="cameraList" class="camera-list"><div class="empty-list">尚無鏡頭</div></div>
+      </section>
+    </aside>
+  </main>
+
+  <footer class="footer-note">V1｜B1 / B2 兩分頁互動式 3D 圖面｜鏡頭資料儲存在此瀏覽器</footer>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
