@@ -13,12 +13,12 @@
       <div>
         <div class="brand-row">
           <h1>昱拓弱電有限公司｜社區地下室 CCTV 3D 規劃</h1>
-          <span class="version-badge" id="versionBadge">V1.5</span>
+          <span class="version-badge" id="versionBadge">V1.6</span>
         </div>
         <p>監視器位置・模組抽屜・死角說明</p>
       </div>
     </div>
-    <div class="status"><span class="dot"></span><span id="statusText">B1 模型已載入｜版本 V1.5</span></div>
+    <div class="status"><span class="dot"></span><span id="statusText">B1 模型已載入｜版本 V1.6</span></div>
   </header>
 
   <nav class="floor-tabs" aria-label="地下室樓層">
@@ -50,7 +50,7 @@
       </div>
 
       <div class="viewer-help">
-        <span>左鍵旋轉</span><span>右鍵平移</span><span>滾輪縮放</span><span>鏡頭可點選移動</span><span>版本：<b id="footerVersionInline">V1.5</b></span>
+        <span>左鍵旋轉</span><span>右鍵平移</span><span>滾輪縮放</span><span>鏡頭可點選移動</span><span>版本：<b id="footerVersionInline">V1.6</b></span>
       </div>
     </section>
 
@@ -63,7 +63,7 @@
           </div>
           <span class="badge">互動模型</span>
         </div>
-        <p class="muted">本版加入鏡頭焦距規格與視角連動，以及專案資料夾、儲存、讀取、刪除與儲存位置選擇。</p>
+        <p class="muted">本版新增專案檔匯出 / 匯入，可實際選擇電腦儲存位置；同時保留鏡頭焦距、資料夾、儲存、讀取與刪除。</p>
       </section>
 
       <section class="panel-section stats-grid">
@@ -91,6 +91,12 @@
           <button id="deleteFolderBtn" class="mini-btn">刪除資料夾</button>
           <button id="saveProjectBtn" class="mini-btn accent">儲存專案</button>
         </div>
+        <div class="drawer-actions file-actions">
+          <button id="exportProjectBtn" class="mini-btn accent">匯出專案檔</button>
+          <button id="importProjectBtn" class="mini-btn accent2">匯入專案檔</button>
+          <input id="importProjectFile" type="file" accept=".json,.utop3d" hidden />
+        </div>
+        <p class="field-note">「匯出專案檔」會讓你選擇電腦實際儲存位置；若瀏覽器不支援指定位置，則改為一般下載。匯入後可再存進網頁內資料夾。</p>
         <div class="section-heading row-between">
           <span>已儲存專案</span>
           <span id="savedCount" class="mini-badge">0 筆</span>
@@ -168,7 +174,7 @@
     </aside>
   </main>
 
-  <footer class="footer-note">V1.5｜昱拓弱電有限公司｜鏡頭焦距連動 FOV｜專案資料夾儲存 / 讀取 / 刪除｜每次更新同步顯示版本號</footer>
+  <footer class="footer-note">V1.6｜昱拓弱電有限公司｜鏡頭焦距連動 FOV｜專案資料夾儲存 / 讀取 / 刪除｜每次更新同步顯示版本號</footer>
 
   <script type="importmap">
   {

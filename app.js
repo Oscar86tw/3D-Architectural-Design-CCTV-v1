@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-const APP_VERSION = 'V1.5';
+const APP_VERSION = 'V1.6';
 const CAMERA_COLOR_PRESETS = {
   red:    { label: '原建置', body: 0xdc2626, cone: 0xef4444, line: 0xf87171 },
   blue:   { label: '增設',   body: 0x2563eb, cone: 0x3b82f6, line: 0x60a5fa },
@@ -43,6 +43,9 @@ const projectFolder = $('projectFolder');
 const projectName = $('projectName');
 const projectList = $('projectList');
 const savedCount = $('savedCount');
+const exportProjectBtn = $('exportProjectBtn');
+const importProjectBtn = $('importProjectBtn');
+const importProjectFile = $('importProjectFile');
 
 $('versionBadge').textContent = APP_VERSION;
 $('footerVersionInline').textContent = APP_VERSION;
@@ -222,9 +225,13 @@ floorTabs.forEach(btn=>btn.onclick=()=>switchFloor(btn.dataset.floor));
 function switchFloor(f){state.floor=f;state.selectedCameraId=null;state.selectedModuleId=null;setAddingMode(null);floorTabs.forEach(b=>b.classList.toggle('active',b.dataset.floor===f));floorTitle.textContent=floorData[f].title;floorChip.textContent=f;buildFloor();renderModules();renderCameras();resetView();statusText.textContent=`${f} 模型已載入｜版本 ${APP_VERSION}`}
 
 // ---------- 專案資料夾 / 儲存 / 讀取 / 刪除 ----------
-const STORAGE_KEY='cctv3d-project-store-v1-5';
+const STORAGE_KEY='cctv3d-project-store-v1-6';
+const STORAGE_KEY_PREV='cctv3d-project-store-v1-5';
 function getStore(){
-  try{return JSON.parse(localStorage.getItem(STORAGE_KEY))||{folders:[{id:'root',name:'我的專案'}],projects:[]}}catch{return {folders:[{id:'root',name:'我的專案'}],projects:[]}}
+  try{
+    const raw=localStorage.getItem(STORAGE_KEY)||localStorage.getItem(STORAGE_KEY_PREV);
+    return JSON.parse(raw)||{folders:[{id:'root',name:'我的專案'}],projects:[]};
+  }catch{return {folders:[{id:'root',name:'我的專案'}],projects:[]}}
 }
 function setStore(s){localStorage.setItem(STORAGE_KEY,JSON.stringify(s))}
 function ensureStore(){const s=getStore();if(!s.folders?.length)s.folders=[{id:'root',name:'我的專案'}];if(!s.projects)s.projects=[];setStore(s);return s}
@@ -235,6 +242,79 @@ $('deleteFolderBtn').onclick=()=>{const s=ensureStore(),id=projectFolder.value;i
 $('saveProjectBtn').onclick=()=>{const name=projectName.value.trim();if(!name){alert('請先輸入專案名稱。');return}const s=ensureStore(),folderId=projectFolder.value;let p=s.projects.find(x=>x.folderId===folderId&&x.name===name);const payload={floor:state.floor,cameras:structuredClone(state.cameras),modules:structuredClone(state.modules),showPlan:state.showPlan};if(p){p.data=payload;p.updatedAt=Date.now();p.version=APP_VERSION}else{p={id:crypto.randomUUID?.()||`project-${Date.now()}`,folderId,name,data:payload,updatedAt:Date.now(),version:APP_VERSION};s.projects.push(p)}setStore(s);renderStorage();statusText.textContent=`已儲存：${name}｜${APP_VERSION}`};
 function loadProject(id){const s=ensureStore(),p=s.projects.find(x=>x.id===id);if(!p)return;if(!confirm(`讀取「${p.name}」？目前未儲存的變更會被取代。`))return;state.cameras=sanitizeCameras(p.data.cameras);state.modules=sanitizeModules(p.data.modules);state.floor=p.data.floor||'B1';state.showPlan=p.data.showPlan!==false;projectName.value=p.name;floorTabs.forEach(b=>b.classList.toggle('active',b.dataset.floor===state.floor));floorTitle.textContent=floorData[state.floor].title;floorChip.textContent=state.floor;buildFloor();renderModules();renderCameras();saveWorking();resetView();statusText.textContent=`已讀取：${p.name}｜${p.version||APP_VERSION}`}
 function deleteProject(id){const s=ensureStore(),p=s.projects.find(x=>x.id===id);if(!p)return;if(!confirm(`確定刪除專案「${p.name}」？`))return;s.projects=s.projects.filter(x=>x.id!==id);setStore(s);renderStorage()}
+
+function buildProjectFilePayload(){
+  const folderText=projectFolder?.selectedOptions?.[0]?.textContent?.trim()||'我的專案';
+  const name=projectName.value.trim()||`CCTV專案-${new Date().toISOString().slice(0,10)}`;
+  return {
+    format:'UTOP-CCTV-3D-PROJECT',
+    schemaVersion:1,
+    appVersion:APP_VERSION,
+    company:'昱拓弱電有限公司',
+    name,
+    folder:folderText,
+    exportedAt:new Date().toISOString(),
+    data:{
+      floor:state.floor,
+      cameras:structuredClone(state.cameras),
+      modules:structuredClone(state.modules),
+      showPlan:state.showPlan
+    }
+  };
+}
+function safeFileName(name){return String(name||'CCTV專案').replace(/[\\/:*?"<>|]+/g,'_').trim()||'CCTV專案'}
+async function exportProjectFile(){
+  const payload=buildProjectFilePayload();
+  const text=JSON.stringify(payload,null,2);
+  const suggested=`${safeFileName(payload.name)}_${APP_VERSION}.utop3d`;
+  try{
+    if('showSaveFilePicker' in window){
+      const handle=await window.showSaveFilePicker({
+        suggestedName:suggested,
+        types:[{description:'昱拓 CCTV 3D 專案檔',accept:{'application/json':['.utop3d','.json']}}]
+      });
+      const writable=await handle.createWritable();
+      await writable.write(text);
+      await writable.close();
+      statusText.textContent=`已匯出專案檔：${payload.name}｜${APP_VERSION}`;
+      return;
+    }
+    const blob=new Blob([text],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const link=document.createElement('a');
+    link.href=url;link.download=suggested;document.body.appendChild(link);link.click();link.remove();URL.revokeObjectURL(url);
+    statusText.textContent=`已下載專案檔：${payload.name}｜${APP_VERSION}`;
+  }catch(err){
+    if(err?.name!=='AbortError') alert(`匯出失敗：${err?.message||err}`);
+  }
+}
+function normalizeImportedProject(raw){
+  if(raw?.format==='UTOP-CCTV-3D-PROJECT'&&raw?.data) return raw;
+  if(raw?.data?.cameras&&raw?.data?.modules) return {format:'UTOP-CCTV-3D-PROJECT',schemaVersion:1,appVersion:raw.version||'舊版',name:raw.name||'匯入專案',folder:'我的專案',data:raw.data};
+  if(raw?.cameras&&raw?.modules) return {format:'UTOP-CCTV-3D-PROJECT',schemaVersion:1,appVersion:'舊版',name:'匯入專案',folder:'我的專案',data:raw};
+  throw new Error('這個檔案不是可辨識的 CCTV 3D 專案檔。');
+}
+async function importProjectFromFile(file){
+  try{
+    const text=await file.text();
+    const parsed=normalizeImportedProject(JSON.parse(text));
+    if(!confirm(`匯入「${parsed.name||file.name}」？目前尚未儲存的變更會被取代。`)) return;
+    state.cameras=sanitizeCameras(parsed.data.cameras);
+    state.modules=sanitizeModules(parsed.data.modules);
+    state.floor=parsed.data.floor==='B2'?'B2':'B1';
+    state.showPlan=parsed.data.showPlan!==false;
+    state.selectedCameraId=null;state.selectedModuleId=null;state.addingMode=null;
+    projectName.value=parsed.name||file.name.replace(/\.(utop3d|json)$/i,'');
+    floorTabs.forEach(b=>b.classList.toggle('active',b.dataset.floor===state.floor));
+    floorTitle.textContent=floorData[state.floor].title;floorChip.textContent=state.floor;
+    buildFloor();renderModules();renderCameras();saveWorking();resetView();
+    statusText.textContent=`已匯入：${projectName.value}｜來源 ${parsed.appVersion||'未知版本'}`;
+  }catch(err){alert(`匯入失敗：${err?.message||err}`)}
+  finally{importProjectFile.value=''}
+}
+exportProjectBtn.onclick=exportProjectFile;
+importProjectBtn.onclick=()=>importProjectFile.click();
+importProjectFile.onchange=()=>{const file=importProjectFile.files?.[0];if(file)importProjectFromFile(file)};
 
 function resize(){const w=viewer.clientWidth,h=viewer.clientHeight;camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h,false)}window.addEventListener('resize',resize);
 function animate(){requestAnimationFrame(animate);controls.update();renderer.render(scene,camera)}
