@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>昱拓弱電有限公司｜社區地下室 3D CCTV 規劃</title>
+  <title>社區地下室 3D CCTV 規劃</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -12,7 +12,7 @@
       <div class="brand-mark">3D</div>
       <div>
         <div class="brand-row">
-          <h1>昱拓弱電有限公司｜社區地下室 CCTV 3D 規劃</h1>
+          <h1>社區地下室 CCTV 3D 規劃</h1>
           <span class="version-badge" id="versionBadge">V1.5</span>
         </div>
         <p>監視器位置・模組抽屜・死角說明</p>
@@ -63,7 +63,7 @@
           </div>
           <span class="badge">互動模型</span>
         </div>
-        <p class="muted">本版加入鏡頭焦距規格與視角連動，以及專案資料夾、儲存、讀取、刪除與儲存位置選擇。</p>
+        <p class="muted">本版新增鏡頭焦距規格與可視角度連動，並加入專案資料夾、儲存、載入與刪除功能。每次更新都同步顯示網頁版本號。</p>
       </section>
 
       <section class="panel-section stats-grid">
@@ -73,33 +73,11 @@
         <div class="stat"><b id="selectedModuleType">—</b><span>選取模組</span></div>
       </section>
 
-      <section class="panel-section" id="projectStorage">
-        <div class="section-heading row-between">
-          <span>專案儲存</span>
-          <span class="mini-badge">資料夾管理</span>
-        </div>
-        <div class="two-col">
-          <label>儲存位置
-            <select id="projectFolder"></select>
-          </label>
-          <label>專案名稱
-            <input id="projectName" type="text" placeholder="例：A社區 CCTV 改善案" />
-          </label>
-        </div>
-        <div class="drawer-actions">
-          <button id="newFolderBtn" class="mini-btn accent2">＋ 新增資料夾</button>
-          <button id="deleteFolderBtn" class="mini-btn">刪除資料夾</button>
-          <button id="saveProjectBtn" class="mini-btn accent">儲存專案</button>
-        </div>
-        <div class="section-heading row-between">
-          <span>已儲存專案</span>
-          <span id="savedCount" class="mini-badge">0 筆</span>
-        </div>
-        <div id="projectList" class="camera-list"><div class="empty-list">尚無儲存專案</div></div>
-      </section>
-
       <section class="panel-section" id="moduleDrawer">
-        <div class="section-heading row-between"><span>模組抽屜</span><span class="mini-badge">牆體／柱子</span></div>
+        <div class="section-heading row-between">
+          <span>模組抽屜</span>
+          <span class="mini-badge">牆體／柱子</span>
+        </div>
         <div class="drawer-actions">
           <button id="drawerAddWallBtn" class="mini-btn accent">新增牆體</button>
           <button id="drawerAddColumnBtn" class="mini-btn accent2">新增柱子</button>
@@ -117,7 +95,9 @@
             <label id="modThicknessWrap">厚度<input id="modThickness" type="number" min="0.05" step="0.05" /></label>
           </div>
           <label>角度<input id="modAngle" type="range" min="0" max="359" value="0" /><output id="modAngleOut">0°</output></label>
-          <div class="form-actions"><button id="deleteModuleBtn" class="danger-button">刪除此模組</button></div>
+          <div class="form-actions">
+            <button id="deleteModuleBtn" class="danger-button">刪除此模組</button>
+          </div>
         </div>
       </section>
 
@@ -126,11 +106,40 @@
         <div id="moduleList" class="camera-list"><div class="empty-list">尚無模組</div></div>
       </section>
 
+
+      <section class="panel-section" id="storagePanel">
+        <div class="section-heading row-between">
+          <span>專案儲存</span><span class="mini-badge">資料夾管理</span>
+        </div>
+        <div class="two-col">
+          <label>儲存位置
+            <select id="saveFolder"></select>
+          </label>
+          <label>專案名稱<input id="saveName" type="text" placeholder="例：B1監視器改善案" /></label>
+        </div>
+        <div class="drawer-actions">
+          <button id="newFolderBtn" class="mini-btn accent">＋ 新增資料夾</button>
+          <button id="deleteFolderBtn" class="mini-btn">刪除資料夾</button>
+          <button id="saveProjectBtn" class="mini-btn accent2">儲存目前專案</button>
+        </div>
+        <div class="section-heading row-between"><span>已儲存專案</span><span id="savedCount" class="mini-badge">0 筆</span></div>
+        <div id="savedProjectList" class="camera-list"><div class="empty-list">尚無儲存資料</div></div>
+      </section>
+
       <section class="panel-section" id="cameraEditor">
-        <div class="section-heading row-between"><span>鏡頭設定</span><span class="mini-badge">焦距 / 7 色分類</span></div>
+        <div class="section-heading row-between">
+          <span>鏡頭設定</span>
+          <span class="mini-badge">7 色分類</span>
+        </div>
         <div id="noCamera" class="empty-state">尚未選取鏡頭。<br>按「＋ 新增鏡頭」後直接在圖面定位。</div>
         <div id="cameraForm" class="camera-form hidden">
           <label>鏡頭名稱<input id="camName" type="text" /></label>
+          <div class="two-col">
+            <label>顏色分類
+              <select id="camColor"></select>
+            </label>
+            <label>分類名稱<input id="camColorLabel" type="text" placeholder="例：原建置 / 增設 / 故障" /></label>
+          </div>
           <div class="two-col">
             <label>鏡頭焦距
               <select id="camLens">
@@ -141,22 +150,22 @@
                 <option value="8">8mm</option>
               </select>
             </label>
-            <label>建議水平視角<input id="camLensFov" type="text" disabled /></label>
+            <label>建議可視角度<input id="camLensFov" type="text" disabled /></label>
           </div>
-          <p class="field-note">焦距越小，視角越廣；焦距越大，視角越窄。此處為常見監視器感光元件的近似值，實際角度仍會依廠牌與感光元件尺寸略有不同。</p>
-          <div class="two-col">
-            <label>顏色分類<select id="camColor"></select></label>
-            <label>分類名稱<input id="camColorLabel" type="text" placeholder="例：原建置 / 增設 / 故障" /></label>
-          </div>
+          <p class="field-note">焦距越小視角越廣；焦距越大視角越窄、遠距細節較集中。實際角度仍會因感光元件尺寸與廠牌而略有差異。</p>
           <label class="checkbox-row"><input id="camFixed" type="checkbox" /> 固定位置（勾選後不可移動）</label>
-          <div class="form-actions inline-start"><button id="moveCamBtn" class="tool accent">移動鏡頭位置</button></div>
+          <div class="form-actions inline-start">
+            <button id="moveCamBtn" class="tool accent">移動鏡頭位置</button>
+          </div>
           <div class="two-col">
-            <label>水平視角 FOV<input id="camFov" type="range" min="30" max="120" value="76" /><output id="camFovOut">76°</output></label>
-            <label>監看距離<input id="camRange" type="range" min="6" max="50" value="18" /><output id="camRangeOut">18m</output></label>
+            <label>水平視角 FOV<input id="camFov" type="range" min="35" max="140" value="90" /><output id="camFovOut">90°</output></label>
+            <label>監看距離<input id="camRange" type="range" min="6" max="35" value="18" /><output id="camRangeOut">18m</output></label>
           </div>
           <label>方向<input id="camYaw" type="range" min="0" max="359" value="0" /><output id="camYawOut">0°</output></label>
           <label>安裝備註<textarea id="camNote" rows="3" placeholder="例：柱後方死角、車道轉角、電梯口"></textarea></label>
-          <div class="form-actions split"><button id="deleteCamBtn" class="danger-button">刪除此鏡頭</button></div>
+          <div class="form-actions split">
+            <button id="deleteCamBtn" class="danger-button">刪除此鏡頭</button>
+          </div>
         </div>
       </section>
 
@@ -168,7 +177,7 @@
     </aside>
   </main>
 
-  <footer class="footer-note">V1.5｜昱拓弱電有限公司｜鏡頭焦距連動 FOV｜專案資料夾儲存 / 讀取 / 刪除｜每次更新同步顯示版本號</footer>
+  <footer class="footer-note">V1.5｜鏡頭焦距規格連動 FOV｜專案資料夾與儲存/載入/刪除｜7 色鏡頭分類｜每次更新同步顯示版本號</footer>
 
   <script type="importmap">
   {
