@@ -2,9 +2,11 @@
 
 昱拓弱電有限公司｜社區地下室 CCTV 3D 規劃。
 
-## 目前版本 V1.20
+## 目前版本 V1.21
 
-### V1.20 雲端整合
+- **V1.21 修正啟動錯誤**：`renderCameraLegend()` 不再於 `state` 初始化前執行，改為在 `refreshUI()` 之後依目前樓層資料更新顏色數量。
+
+### V1.21 雲端整合
 - Google Sheets：`1-jy-MWBXMyx92xZ-RTnwqpB-j7cMnlOIB2i1lh2eUZg`
 - API 有效端點來源固定為：`工作表1!B1`
 - 前端不永久寫死 Apps Script `/exec` 網址。
