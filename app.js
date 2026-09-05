@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-const APP_VERSION = 'V1.37';
+const APP_VERSION = 'V1.38';
 const DEFAULT_COMMUNITY_ID = 'hualong-chao-plus';
 const CATALOG_KEY = 'cctv3d-site-catalog-v1-24';
 const WORKING_KEY = 'cctv3d-working-v1-24';
@@ -741,14 +741,50 @@ function ensureGasBridge(){
   if(gasBridgeReadyPromise) return gasBridgeReadyPromise;
 
   gasBridgeReadyPromise=new Promise(async(resolve,reject)=>{
+    let timer=null;
+    let pingTimer=null;
+    let settled=false;
+
+    const cleanup=()=>{
+      if(timer)clearTimeout(timer);
+      if(pingTimer)clearInterval(pingTimer);
+      window.removeEventListener('message',onReady);
+    };
+
+    const fail=(err)=>{
+      if(settled)return;
+      settled=true;
+      cleanup();
+      reject(err instanceof Error?err:new Error(String(err)));
+    };
+
+    const succeed=()=>{
+      if(settled)return;
+      settled=true;
+      cleanup();
+      gasBridgeReady=true;
+      resolve(gasBridgeFrame);
+    };
+
+    const onReady=(event)=>{
+      if(!gasBridgeFrame || event.source!==gasBridgeFrame.contentWindow)return;
+      const data=event.data||{};
+      if(data.type==='CCTV_GAS_BRIDGE_READY' || data.type==='CCTV_GAS_BRIDGE_PONG'){
+        succeed();
+      }
+    };
+
+    // 先掛監聽，再建立 iframe，避免 Bridge 太快回 READY 而被漏接。
+    window.addEventListener('message',onReady);
+
     try{
       const base=await getApiUrlFromSheet();
       const bridgeUrl=new URL(base);
       bridgeUrl.searchParams.set('mode','bridge');
+      bridgeUrl.searchParams.set('_ts',String(Date.now()));
 
       gasBridgeFrame=document.createElement('iframe');
       gasBridgeFrame.id='gasApiBridgeFrame';
-      gasBridgeFrame.src=bridgeUrl.toString();
       gasBridgeFrame.style.position='fixed';
       gasBridgeFrame.style.width='1px';
       gasBridgeFrame.style.height='1px';
@@ -756,25 +792,30 @@ function ensureGasBridge(){
       gasBridgeFrame.style.pointerEvents='none';
       gasBridgeFrame.style.border='0';
       gasBridgeFrame.setAttribute('aria-hidden','true');
+
+      gasBridgeFrame.onload=()=>{
+        try{
+          gasBridgeFrame.contentWindow.postMessage({type:'CCTV_GAS_BRIDGE_PING'},'*');
+        }catch(_){}
+      };
+
+      gasBridgeFrame.onerror=()=>fail(new Error('Apps Script Bridge iframe 載入失敗'));
+
+      gasBridgeFrame.src=bridgeUrl.toString();
       document.body.appendChild(gasBridgeFrame);
 
-      const timer=setTimeout(()=>{
-        reject(new Error('Apps Script Bridge 連線逾時。請確認 Apps Script 是以「網頁應用程式」部署，不是「資料庫/程式庫」部署；執行身分為我、存取權為任何人，且工作表1!B1 必須是 /exec 網址。'));
-      },12000);
+      // 每 500ms 主動握手，Bridge 就算第一次 READY 太早送出也能重新回應。
+      pingTimer=setInterval(()=>{
+        try{
+          gasBridgeFrame?.contentWindow?.postMessage({type:'CCTV_GAS_BRIDGE_PING'},'*');
+        }catch(_){}
+      },500);
 
-      const onReady=(event)=>{
-        if(event.source!==gasBridgeFrame.contentWindow)return;
-        const data=event.data||{};
-        if(data.type==='CCTV_GAS_BRIDGE_READY'){
-          clearTimeout(timer);
-          window.removeEventListener('message',onReady);
-          gasBridgeReady=true;
-          resolve(gasBridgeFrame);
-        }
-      };
-      window.addEventListener('message',onReady);
+      timer=setTimeout(()=>{
+        fail(new Error('Apps Script Bridge 連線逾時。/exec?action=ping 已可用，但 Bridge 頁面沒有完成握手。請更新 V1.38 的 Code.gs 並重新部署新版本。'));
+      },15000);
     }catch(err){
-      reject(err);
+      fail(err);
     }
   }).catch(err=>{
     gasBridgeReadyPromise=null;
