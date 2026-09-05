@@ -13,12 +13,12 @@
       <div>
         <div class="brand-row">
           <h1>昱拓弱電有限公司｜社區地下室 CCTV 3D 規劃</h1>
-          <span class="version-badge" id="versionBadge">V1.10</span>
+          <span class="version-badge" id="versionBadge">V1.11</span>
         </div>
-        <p>社區資料夾・連續牆體・實際可視範圍・提示氣球</p>
+        <p>社區資料夾・連續牆體・可視光影・車機車遮擋・提示氣球</p>
       </div>
     </div>
-    <div class="status"><span class="dot"></span><span id="statusText">B1 模型已載入｜版本 V1.10</span></div>
+    <div class="status"><span class="dot"></span><span id="statusText">B1 模型已載入｜版本 V1.11</span></div>
   </header>
 
   <nav class="floor-tabs" aria-label="地下室樓層">
@@ -39,6 +39,8 @@
           <button id="addCameraBtn" class="tool primary">＋ 新增鏡頭</button>
           <button id="addWallBtn" class="tool accent">＋ 折線牆體</button>
           <button id="addColumnBtn" class="tool accent2">＋ 新增柱子</button>
+          <button id="addCarBtn" class="tool accent">＋ 新增汽車</button>
+          <button id="addMotorBtn" class="tool accent2">＋ 新增機車</button>
           <button id="clearModuleBtn" class="tool warn ghost">清除本層模組</button>
         </div>
       </div>
@@ -54,8 +56,8 @@
         <span>右鍵平移</span>
         <span>滾輪縮放</span>
         <span>牆體：連續點位；點回起點自動完成，Enter 可結束開放牆，Esc 取消</span>
-        <span>視角：只顯示實際可見邊界，牆柱遮擋不穿透</span><span>圖紙比例：X/Z 同比例映射＋兩點實尺校正</span>
-        <span>版本：<b id="footerVersionInline">V1.10</b></span>
+        <span>視角：顯示實際可見光影範圍，牆柱與車機車遮擋不穿透</span><span>圖紙比例：X/Z 同比例映射＋兩點實尺校正</span>
+        <span>版本：<b id="footerVersionInline">V1.11</b></span>
       </div>
     </section>
 
@@ -68,7 +70,7 @@
           </div>
           <span class="badge">互動模型</span>
         </div>
-        <p class="muted">目前 B1、B2 圖面歸類在「樺龍潮+ 社區」。本版把鏡頭範圍改為「實際看得到的邊界」，不再鋪扇形色塊；新建牆體以連續牆面生成，點回起點會自動封閉完成；藍色鏡頭上方會顯示 4 公尺高的藍色提示氣球。</p>
+        <p class="muted">目前 B1、B2 圖面歸類在「樺龍潮+ 社區」。本版讓鏡頭可視範圍加入單色光影，更容易辨識；牆體維持連續牆面生成；新增汽車與機車模組，當鏡頭照到車輛時也會形成遮擋缺角；藍色鏡頭上方會顯示 4 公尺高的藍色提示氣球。</p>
       </section>
 
       <section class="panel-section stats-grid">
@@ -150,6 +152,8 @@
         <div class="drawer-actions">
           <button id="drawerAddWallBtn" class="mini-btn accent">折線牆體</button>
           <button id="drawerAddColumnBtn" class="mini-btn accent2">新增柱子</button>
+          <button id="drawerAddCarBtn" class="mini-btn accent">新增汽車</button>
+          <button id="drawerAddMotorBtn" class="mini-btn accent2">新增機車</button>
         </div>
         <div id="noModule" class="empty-state">尚未選取模組。<br>可直接拖曳移動；若勾選固定，則不會再被拖曳。</div>
         <div id="moduleForm" class="module-form hidden">
@@ -186,7 +190,7 @@
             </label>
             <label>建議水平視角<input id="camLensFov" type="text" disabled /></label>
           </div>
-          <div class="field-note">焦距越小，視角越廣；焦距越大，視角越窄。視角只顯示鏡頭實際看得到的邊界，不鋪色塊；牆柱遮擋不穿透。藍色「增設」鏡頭會在 4m 高度顯示藍色提示氣球。</div>
+          <div class="field-note">焦距越小，視角越廣；焦距越大，視角越窄。視角會以單色光影顯示鏡頭真正看得到的畫面範圍；牆、柱、汽車與機車都會造成遮擋。藍色「增設」鏡頭會在 4m 高度顯示藍色提示氣球。</div>
           <div class="two-col">
             <label>顏色分類<select id="camColor"></select></label>
             <label>分類名稱<input id="camColorLabel" type="text" placeholder="例：原建置 / 增設 / 故障" /></label>
@@ -209,6 +213,8 @@
             <option value="camera" selected>鏡頭</option>
             <option value="wall">牆體</option>
             <option value="column">柱子</option>
+            <option value="car">汽車</option>
+            <option value="motorcycle">機車</option>
             <option value="all">全部</option>
           </select>
         </div>
@@ -218,7 +224,7 @@
     </aside>
   </main>
 
-  <footer class="footer-note">V1.10｜昱拓弱電有限公司｜鏡頭實際可視範圍｜連續牆體自動封閉｜藍色鏡頭 4m 提示氣球｜社區 / 樓層管理</footer>
+  <footer class="footer-note">V1.11｜昱拓弱電有限公司｜鏡頭實際可視範圍｜連續牆體自動封閉｜藍色鏡頭 4m 提示氣球｜社區 / 樓層管理</footer>
 
   <script type="importmap">
   {
