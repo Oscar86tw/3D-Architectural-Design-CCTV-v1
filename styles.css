@@ -37,3 +37,8 @@ body{overflow:hidden}
 .footer-note{height:28px;display:grid;place-items:center;color:#607487;font-size:10px}.form-actions{display:flex;justify-content:flex-end;gap:8px}.danger-button{border:1px solid #7f1d1d;background:#3a1518;color:#fecaca;border-radius:7px;padding:8px 10px;cursor:pointer}.field-note{font-size:11px;color:#89a0b2;line-height:1.6;margin:-2px 0 10px}.inline-select{padding:6px 9px;font-size:12px}.project-actions{display:flex;gap:6px;flex-shrink:0}.project-actions button{padding:6px 8px;font-size:11px}.camera-tools{align-items:center}
 @media(max-width:1180px){.workspace{grid-template-columns:minmax(0,1fr) 360px}}
 @media(max-width:980px){body{overflow:auto}.workspace{height:auto;grid-template-columns:1fr}.viewer-card{height:70vh}.side-panel{max-height:none}.topbar{height:auto;min-height:70px}.brand p,.status{display:none}.floor-tabs{position:sticky;top:0;z-index:10}.viewer-help{overflow:auto;white-space:nowrap}.workspace{padding:8px}.camera-tools{width:100%}.stats-grid{grid-template-columns:repeat(2,1fr)}}
+/* V1.9 社區/樓層與實尺校正 */
+#siteManager label,#projectStorage label{display:block;font-size:11px;color:#9fb1c1;margin-bottom:10px}
+#siteManager select,#siteManager input,#projectStorage select,#projectStorage input[type=text]{width:100%;margin-top:5px;background:#0d1620;border:1px solid #314354;border-radius:7px;color:white;padding:8px;outline:none}
+#siteManager .mini-btn,#projectStorage .mini-btn{white-space:nowrap}
+#scaleBadge{color:#d9f99d;border-color:#4d6b2b;background:#1d2f14}

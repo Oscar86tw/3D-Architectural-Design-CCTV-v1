@@ -13,12 +13,12 @@
       <div>
         <div class="brand-row">
           <h1>昱拓弱電有限公司｜社區地下室 CCTV 3D 規劃</h1>
-          <span class="version-badge" id="versionBadge">V1.8</span>
+          <span class="version-badge" id="versionBadge">V1.10</span>
         </div>
-        <p>鏡頭配置・遮擋視角・專案儲存・牆體折線建立</p>
+        <p>社區資料夾・連續牆體・實際可視範圍・提示氣球</p>
       </div>
     </div>
-    <div class="status"><span class="dot"></span><span id="statusText">B1 模型已載入｜版本 V1.8</span></div>
+    <div class="status"><span class="dot"></span><span id="statusText">B1 模型已載入｜版本 V1.10</span></div>
   </header>
 
   <nav class="floor-tabs" aria-label="地下室樓層">
@@ -53,9 +53,9 @@
         <span>左鍵旋轉 / 選取 / 拖曳移動</span>
         <span>右鍵平移</span>
         <span>滾輪縮放</span>
-        <span>牆體折線：多點點擊，按 Enter 完成，Esc 取消</span>
-        <span>圖紙比例：X/Z 同比例映射</span>
-        <span>版本：<b id="footerVersionInline">V1.8</b></span>
+        <span>牆體：連續點位；點回起點自動完成，Enter 可結束開放牆，Esc 取消</span>
+        <span>視角：只顯示實際可見邊界，牆柱遮擋不穿透</span><span>圖紙比例：X/Z 同比例映射＋兩點實尺校正</span>
+        <span>版本：<b id="footerVersionInline">V1.10</b></span>
       </div>
     </section>
 
@@ -68,7 +68,7 @@
           </div>
           <span class="badge">互動模型</span>
         </div>
-        <p class="muted">本版新增鏡頭視角遮擋判斷：若前方有牆體或柱子，視角不會穿透，會自動形成缺角。鏡頭、柱子與牆體仍可拖曳移動，勾選固定後不可再移動。圖紙保持原始長寬比例，角度計算採等比例座標映射。</p>
+        <p class="muted">目前 B1、B2 圖面歸類在「樺龍潮+ 社區」。本版把鏡頭範圍改為「實際看得到的邊界」，不再鋪扇形色塊；新建牆體以連續牆面生成，點回起點會自動封閉完成；藍色鏡頭上方會顯示 4 公尺高的藍色提示氣球。</p>
       </section>
 
       <section class="panel-section stats-grid">
@@ -76,6 +76,46 @@
         <div class="stat"><b id="moduleCount">0</b><span>本層模組</span></div>
         <div class="stat"><b id="selectedFov">—</b><span>選取 FOV</span></div>
         <div class="stat"><b id="selectedType">—</b><span>選取項目</span></div>
+      </section>
+
+      <section class="panel-section" id="siteManager">
+        <div class="section-heading row-between">
+          <span>社區 / 樓層圖面</span>
+          <span class="mini-badge">案場管理</span>
+        </div>
+        <div class="two-col">
+          <label>社區資料夾<select id="communitySelect"></select></label>
+          <label>樓層圖面<select id="floorSelect"></select></label>
+        </div>
+        <div class="drawer-actions">
+          <button id="addCommunityBtn" class="mini-btn accent2">＋ 新增社區</button>
+          <button id="deleteCommunityBtn" class="mini-btn">刪除社區</button>
+          <button id="addFloorBtn" class="mini-btn accent">＋ 新增圖面</button>
+          <button id="deleteFloorBtn" class="mini-btn">刪除圖面</button>
+          <input id="floorFileInput" type="file" accept=".pdf,image/*" hidden />
+        </div>
+        <div id="floorPlanInfo" class="field-note">樺龍潮+ 社區 / B1</div>
+
+        <div class="section-heading row-between top-gap">
+          <span>兩點實尺校正</span>
+          <span id="scaleBadge" class="mini-badge">未校正</span>
+        </div>
+        <div class="drawer-actions">
+          <button id="startCalibrationBtn" class="mini-btn accent">① 點兩個已知距離點</button>
+          <button id="resetCalibrationBtn" class="mini-btn">重設比例</button>
+        </div>
+        <div class="two-col">
+          <label>實際距離（公尺）
+            <input id="calibrationMeters" type="number" min="0.1" step="0.1" placeholder="例：5.0" />
+          </label>
+          <label>圖上兩點距離
+            <input id="calibrationWorld" type="text" disabled placeholder="尚未取點" />
+          </label>
+        </div>
+        <div class="drawer-actions">
+          <button id="applyCalibrationBtn" class="mini-btn accent2">② 套用實尺比例</button>
+        </div>
+        <div id="calibrationStatus" class="field-note">尚未校正。先在圖紙上選兩個有已知實際距離的點位。</div>
       </section>
 
       <section class="panel-section" id="projectStorage">
@@ -146,7 +186,7 @@
             </label>
             <label>建議水平視角<input id="camLensFov" type="text" disabled /></label>
           </div>
-          <div class="field-note">焦距越小，視角越廣；焦距越大，視角越窄。這裡採常見監視器近似值。若前方有牆或柱，視域會自動被遮擋，不會穿透。</div>
+          <div class="field-note">焦距越小，視角越廣；焦距越大，視角越窄。視角只顯示鏡頭實際看得到的邊界，不鋪色塊；牆柱遮擋不穿透。藍色「增設」鏡頭會在 4m 高度顯示藍色提示氣球。</div>
           <div class="two-col">
             <label>顏色分類<select id="camColor"></select></label>
             <label>分類名稱<input id="camColorLabel" type="text" placeholder="例：原建置 / 增設 / 故障" /></label>
@@ -178,7 +218,7 @@
     </aside>
   </main>
 
-  <footer class="footer-note">V1.8｜昱拓弱電有限公司｜鏡頭 / 模組可拖曳移動與固定位置｜項目清單分類篩選｜牆體折線建立｜圖紙比例等比映射</footer>
+  <footer class="footer-note">V1.10｜昱拓弱電有限公司｜鏡頭實際可視範圍｜連續牆體自動封閉｜藍色鏡頭 4m 提示氣球｜社區 / 樓層管理</footer>
 
   <script type="importmap">
   {
