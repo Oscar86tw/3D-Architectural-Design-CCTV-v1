@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-const APP_VERSION = 'V1.36';
+const APP_VERSION = 'V1.37';
 const DEFAULT_COMMUNITY_ID = 'hualong-chao-plus';
 const CATALOG_KEY = 'cctv3d-site-catalog-v1-24';
 const WORKING_KEY = 'cctv3d-working-v1-24';
@@ -720,6 +720,7 @@ async function getApiUrlFromSheet(force=false){
     if(!res.ok)throw new Error(`B1 讀取失敗 HTTP ${res.status}`);
     const url=parseCsvSingleCell(await res.text());
     if(/\/dev(?:\?.*)?$/i.test(url))throw new Error('工作表1!B1 目前是 /dev 測試網址，請改成正式 /exec 網址');
+    if(/script\.google\.com\/macros\/library\//i.test(url))throw new Error('工作表1!B1 目前是 Apps Script「資料庫/程式庫」網址，不是網頁應用程式 /exec。請重新部署為「網頁應用程式」。');
     if(!/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec(?:\?.*)?$/i.test(url))throw new Error('工作表1!B1 不是有效的 Apps Script /exec 網址');
     activeApiUrl=url;localStorage.setItem(API_CACHE_KEY,url);setStartupStep('api','done','已取得目前有效 /exec 網址');return url;
   }catch(err){
@@ -758,7 +759,7 @@ function ensureGasBridge(){
       document.body.appendChild(gasBridgeFrame);
 
       const timer=setTimeout(()=>{
-        reject(new Error('Apps Script Bridge 連線逾時，請確認 Web App 已部署且允許任何人存取。'));
+        reject(new Error('Apps Script Bridge 連線逾時。請確認 Apps Script 是以「網頁應用程式」部署，不是「資料庫/程式庫」部署；執行身分為我、存取權為任何人，且工作表1!B1 必須是 /exec 網址。'));
       },12000);
 
       const onReady=(event)=>{
