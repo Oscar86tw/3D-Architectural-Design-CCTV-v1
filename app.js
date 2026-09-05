@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-const APP_VERSION = 'V1.34';
+const APP_VERSION = 'V1.36';
 const DEFAULT_COMMUNITY_ID = 'hualong-chao-plus';
 const CATALOG_KEY = 'cctv3d-site-catalog-v1-24';
 const WORKING_KEY = 'cctv3d-working-v1-24';
@@ -728,8 +728,100 @@ async function getApiUrlFromSheet(force=false){
     setStartupStep('api','error',err.message);throw err;
   }
 }
-async function apiGet(action,params={}){const base=await getApiUrlFromSheet();const u=new URL(base);u.searchParams.set('action',action);Object.entries(params).forEach(([k,v])=>u.searchParams.set(k,v));const r=await fetch(u.toString(),{cache:'no-store'});if(!r.ok)throw new Error(`API HTTP ${r.status}`);return await r.json();}
-async function apiPost(body){const base=await getApiUrlFromSheet();const r=await fetch(base,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body)});if(!r.ok)throw new Error(`API HTTP ${r.status}`);return await r.json();}
+
+let gasBridgeFrame=null;
+let gasBridgeReady=false;
+let gasBridgeReadyPromise=null;
+let gasBridgeSeq=0;
+const gasBridgePending=new Map();
+
+function ensureGasBridge(){
+  if(gasBridgeReady && gasBridgeFrame) return Promise.resolve(gasBridgeFrame);
+  if(gasBridgeReadyPromise) return gasBridgeReadyPromise;
+
+  gasBridgeReadyPromise=new Promise(async(resolve,reject)=>{
+    try{
+      const base=await getApiUrlFromSheet();
+      const bridgeUrl=new URL(base);
+      bridgeUrl.searchParams.set('mode','bridge');
+
+      gasBridgeFrame=document.createElement('iframe');
+      gasBridgeFrame.id='gasApiBridgeFrame';
+      gasBridgeFrame.src=bridgeUrl.toString();
+      gasBridgeFrame.style.position='fixed';
+      gasBridgeFrame.style.width='1px';
+      gasBridgeFrame.style.height='1px';
+      gasBridgeFrame.style.opacity='0';
+      gasBridgeFrame.style.pointerEvents='none';
+      gasBridgeFrame.style.border='0';
+      gasBridgeFrame.setAttribute('aria-hidden','true');
+      document.body.appendChild(gasBridgeFrame);
+
+      const timer=setTimeout(()=>{
+        reject(new Error('Apps Script Bridge 連線逾時，請確認 Web App 已部署且允許任何人存取。'));
+      },12000);
+
+      const onReady=(event)=>{
+        if(event.source!==gasBridgeFrame.contentWindow)return;
+        const data=event.data||{};
+        if(data.type==='CCTV_GAS_BRIDGE_READY'){
+          clearTimeout(timer);
+          window.removeEventListener('message',onReady);
+          gasBridgeReady=true;
+          resolve(gasBridgeFrame);
+        }
+      };
+      window.addEventListener('message',onReady);
+    }catch(err){
+      reject(err);
+    }
+  }).catch(err=>{
+    gasBridgeReadyPromise=null;
+    gasBridgeReady=false;
+    if(gasBridgeFrame){gasBridgeFrame.remove();gasBridgeFrame=null;}
+    throw err;
+  });
+
+  return gasBridgeReadyPromise;
+}
+
+window.addEventListener('message',event=>{
+  const data=event.data||{};
+  if(data.type!=='CCTV_GAS_BRIDGE_RESPONSE')return;
+  const pending=gasBridgePending.get(data.id);
+  if(!pending)return;
+  gasBridgePending.delete(data.id);
+  clearTimeout(pending.timer);
+  if(data.ok) pending.resolve(data.result);
+  else pending.reject(new Error(data.error||'Apps Script Bridge 執行失敗'));
+});
+
+async function gasBridgeCall(action,payload={}){
+  const frame=await ensureGasBridge();
+  const id=`gas_${Date.now()}_${++gasBridgeSeq}`;
+  return new Promise((resolve,reject)=>{
+    const timer=setTimeout(()=>{
+      gasBridgePending.delete(id);
+      reject(new Error(`Apps Script Bridge ${action} 執行逾時`));
+    },20000);
+    gasBridgePending.set(id,{resolve,reject,timer});
+    frame.contentWindow.postMessage({
+      type:'CCTV_GAS_BRIDGE_REQUEST',
+      id,
+      action,
+      payload
+    },'*');
+  });
+}
+
+async function apiGet(action,params={}){
+  return await gasBridgeCall(action,{params});
+}
+
+async function apiPost(body){
+  const action=body?.action||'';
+  return await gasBridgeCall(action,{body});
+}
 
 function renderLocalProjects(){
   const s=ensureStore(),fid=els.localProjectFolder?.value||s.folders[0].id,list=s.projects.filter(p=>p.folderId===fid).sort((a,b)=>b.updatedAt-a.updatedAt);
@@ -822,7 +914,7 @@ async function refreshCloudProjects(forceApi=false){
     setCloudStatus(false,`API 來源：工作表1!B1｜${err.message}`);
     els.projectList.innerHTML='<div class="empty-list">雲端連線失敗，請確認工作表1!B1、分享權限與 Apps Script 部署權限。</div>';
     els.savedCount.textContent='0 筆';
-    showErrorModal('Google Sheets 雲端連線失敗',err,'工作表1!B1 / Apps Script API');
+    showErrorModal('Google Drive 雲端連線失敗',err,'Apps Script Bridge / 工作表1!B1');
   }
 }
 function renderStore(){renderFolderOptions();renderCloudFolderOptions();renderLocalProjects();renderCloudProjects();}
