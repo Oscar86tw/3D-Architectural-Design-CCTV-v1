@@ -1,15 +1,15 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-const APP_VERSION = 'V1.7';
+const APP_VERSION = 'V1.8';
 const PLAN_W = 2530;
 const PLAN_H = 1980;
 const PX_TO_UNIT = 0.04; // X/Z 同比例映射，保留原圖長寬比
 const FLOOR_W = PLAN_W * PX_TO_UNIT;
 const FLOOR_D = PLAN_H * PX_TO_UNIT;
-const WORKING_KEY = 'cctv3d-working-v1-7';
-const STORE_KEY = 'cctv3d-project-store-v1-7';
-const PREV_STORE_KEYS = ['cctv3d-project-store-v1-6', 'cctv3d-project-store-v1-5'];
+const WORKING_KEY = 'cctv3d-working-v1-8';
+const STORE_KEY = 'cctv3d-project-store-v1-8';
+const PREV_STORE_KEYS = ['cctv3d-project-store-v1-7', 'cctv3d-project-store-v1-6', 'cctv3d-project-store-v1-5'];
 
 const CAMERA_COLOR_PRESETS = {
   red:    { label: '原建置', body: 0xdc2626, cone: 0xef4444, line: 0xf87171 },
@@ -97,7 +97,7 @@ function loadWorkingState(){
   const empty = { floor: 'B1', showPlan: true, listFilter: 'camera', cameras: { B1: [], B2: [] }, modules: { B1: [], B2: [] }, selected: { kind: 'camera', id: null } };
   try{
     const raw = JSON.parse(localStorage.getItem(WORKING_KEY) || '{}');
-    const prevRaw = JSON.parse(localStorage.getItem('cctv3d-working-v1-6') || '{}');
+    const prevRaw = JSON.parse(localStorage.getItem('cctv3d-working-v1-7') || localStorage.getItem('cctv3d-working-v1-6') || '{}');
     const merged = Object.keys(raw).length ? raw : prevRaw;
     empty.floor = merged.floor || 'B1';
     empty.showPlan = merged.showPlan !== false;
@@ -172,6 +172,63 @@ function clearGroup(group){
 function colorToHex(n){ return `#${n.toString(16).padStart(6, '0')}`; }
 function lightHex(hex, amt=.2){ const c = new THREE.Color(hex); c.lerp(new THREE.Color(0xffffff), amt); return c.getHex(); }
 
+function getModuleCorners(data){
+  const halfLen = data.length / 2;
+  const halfDepth = (data.type === 'wall' ? data.thickness : data.width) / 2;
+  const angle = -THREE.MathUtils.degToRad(data.angle || 0);
+  const base = [
+    new THREE.Vector3(-halfLen, 0, -halfDepth),
+    new THREE.Vector3( halfLen, 0, -halfDepth),
+    new THREE.Vector3( halfLen, 0,  halfDepth),
+    new THREE.Vector3(-halfLen, 0,  halfDepth)
+  ];
+  return base.map(v => {
+    v.applyAxisAngle(new THREE.Vector3(0,1,0), angle);
+    return { x: data.x + v.x, z: data.z + v.z };
+  });
+}
+function getObstacleSegments(){
+  const segs = [];
+  state.modules[state.floor].forEach(m => {
+    const pts = getModuleCorners(m);
+    for(let i=0;i<pts.length;i++) segs.push([pts[i], pts[(i+1)%pts.length]]);
+  });
+  const hw = FLOOR_W / 2, hd = FLOOR_D / 2;
+  const bounds = [{x:-hw,z:-hd},{x:hw,z:-hd},{x:hw,z:hd},{x:-hw,z:hd}];
+  for(let i=0;i<bounds.length;i++) segs.push([bounds[i], bounds[(i+1)%bounds.length]]);
+  return segs;
+}
+function raySegmentDistance(origin, dir, a, b){
+  const sx = b.x - a.x, sz = b.z - a.z;
+  const det = dir.x * sz - dir.z * sx;
+  if(Math.abs(det) < 1e-8) return null;
+  const ox = a.x - origin.x, oz = a.z - origin.z;
+  const t = (ox * sz - oz * sx) / det;
+  const u = (ox * dir.z - oz * dir.x) / det;
+  if(t >= 0 && u >= 0 && u <= 1) return t;
+  return null;
+}
+function computeOccludedDistances(cam){
+  const theta = THREE.MathUtils.degToRad(cam.fov);
+  const yaw = THREE.MathUtils.degToRad(cam.yaw);
+  const segments = getObstacleSegments();
+  const samples = Math.max(80, Math.round(cam.fov * 1.6));
+  const distances = [];
+  const origin = { x: cam.x, z: cam.z };
+  for(let i=0;i<=samples;i++){
+    const a = -theta/2 + theta * (i / samples);
+    const v = new THREE.Vector3(Math.cos(a), 0, -Math.sin(a)).applyAxisAngle(new THREE.Vector3(0,1,0), -yaw);
+    const dir2 = { x: v.x, z: v.z };
+    let nearest = cam.range;
+    for(const [p1, p2] of segments){
+      const d = raySegmentDistance(origin, dir2, p1, p2);
+      if(d !== null && d > 0.08 && d < nearest) nearest = d;
+    }
+    distances.push({ a, d: nearest });
+  }
+  return distances;
+}
+
 function makeCameraMesh(data){
   const selected = state.selected.kind === 'camera' && state.selected.id === data.id;
   const preset = CAMERA_COLOR_PRESETS[data.colorKey] || CAMERA_COLOR_PRESETS.red;
@@ -185,18 +242,28 @@ function makeCameraMesh(data){
   pole.position.y = 1.45; pole.userData = { kind: 'camera', id: data.id }; g.add(pole);
   const ring = new THREE.Mesh(new THREE.CylinderGeometry(.55, .65, .12, 18), new THREE.MeshStandardMaterial({ color: selected ? 0xffffff : preset.body, transparent: true, opacity: .95 }));
   ring.position.y = .06; ring.userData = { kind: 'camera', id: data.id }; g.add(ring);
-  const theta = THREE.MathUtils.degToRad(data.fov); const r = data.range;
-  const shape = new THREE.Shape(); shape.moveTo(0,0);
-  for(let i=0;i<=32;i++){
-    const a = -theta/2 + theta * (i/32);
-    shape.lineTo(Math.cos(a)*r, Math.sin(a)*r);
-  }
+
+  const distances = computeOccludedDistances(data);
+  const shape = new THREE.Shape();
+  shape.moveTo(0,0);
+  distances.forEach(({a,d}) => shape.lineTo(Math.cos(a) * d, Math.sin(a) * d));
   shape.lineTo(0,0);
-  const cone = new THREE.Mesh(new THREE.ShapeGeometry(shape), new THREE.MeshBasicMaterial({ color: preset.cone, transparent: true, opacity: .16, side: THREE.DoubleSide, depthWrite: false }));
+  const cone = new THREE.Mesh(new THREE.ShapeGeometry(shape), new THREE.MeshBasicMaterial({ color: preset.cone, transparent: true, opacity: .18, side: THREE.DoubleSide, depthWrite: false }));
   cone.rotation.x = -Math.PI/2; cone.position.y = .08; cone.userData = { kind: 'camera', id: data.id }; g.add(cone);
-  const pts=[]; [-theta/2, theta/2].forEach(a => pts.push(new THREE.Vector3(0,.11,0), new THREE.Vector3(Math.cos(a)*r, .11, -Math.sin(a)*r)));
-  const edge = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: preset.line, transparent:true, opacity:.9 }));
+
+  const linePts = [];
+  linePts.push(new THREE.Vector3(0, .11, 0));
+  distances.forEach(({a,d}) => linePts.push(new THREE.Vector3(Math.cos(a) * d, .11, -Math.sin(a) * d)));
+  linePts.push(new THREE.Vector3(0, .11, 0));
+  const contour = new THREE.Line(new THREE.BufferGeometry().setFromPoints(linePts), new THREE.LineBasicMaterial({ color: preset.line, transparent: true, opacity: .92 }));
+  contour.userData = { kind: 'camera', id: data.id }; g.add(contour);
+
+  const edgeAngles = [distances[0], distances[distances.length - 1]];
+  const edgePts = [];
+  edgeAngles.forEach(({a,d}) => edgePts.push(new THREE.Vector3(0,.11,0), new THREE.Vector3(Math.cos(a)*d,.11,-Math.sin(a)*d)));
+  const edge = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(edgePts), new THREE.LineBasicMaterial({ color: preset.line, transparent:true, opacity:.95 }));
   edge.userData = { kind: 'camera', id: data.id }; g.add(edge);
+
   g.position.set(data.x, 0, data.z); g.rotation.y = -THREE.MathUtils.degToRad(data.yaw);
   return g;
 }

@@ -13,12 +13,12 @@
       <div>
         <div class="brand-row">
           <h1>昱拓弱電有限公司｜社區地下室 CCTV 3D 規劃</h1>
-          <span class="version-badge" id="versionBadge">V1.7</span>
+          <span class="version-badge" id="versionBadge">V1.8</span>
         </div>
-        <p>鏡頭配置・模組抽屜・專案儲存・牆體折線建立</p>
+        <p>鏡頭配置・遮擋視角・專案儲存・牆體折線建立</p>
       </div>
     </div>
-    <div class="status"><span class="dot"></span><span id="statusText">B1 模型已載入｜版本 V1.7</span></div>
+    <div class="status"><span class="dot"></span><span id="statusText">B1 模型已載入｜版本 V1.8</span></div>
   </header>
 
   <nav class="floor-tabs" aria-label="地下室樓層">
@@ -55,7 +55,7 @@
         <span>滾輪縮放</span>
         <span>牆體折線：多點點擊，按 Enter 完成，Esc 取消</span>
         <span>圖紙比例：X/Z 同比例映射</span>
-        <span>版本：<b id="footerVersionInline">V1.7</b></span>
+        <span>版本：<b id="footerVersionInline">V1.8</b></span>
       </div>
     </section>
 
@@ -68,7 +68,7 @@
           </div>
           <span class="badge">互動模型</span>
         </div>
-        <p class="muted">本版支援鏡頭、柱子與牆體模組直接拖曳移動；勾選固定後不會再跟著滑鼠移動。圖紙保持原始長寬比例，角度計算採等比例座標映射。</p>
+        <p class="muted">本版新增鏡頭視角遮擋判斷：若前方有牆體或柱子，視角不會穿透，會自動形成缺角。鏡頭、柱子與牆體仍可拖曳移動，勾選固定後不可再移動。圖紙保持原始長寬比例，角度計算採等比例座標映射。</p>
       </section>
 
       <section class="panel-section stats-grid">
@@ -146,7 +146,7 @@
             </label>
             <label>建議水平視角<input id="camLensFov" type="text" disabled /></label>
           </div>
-          <div class="field-note">焦距越小，視角越廣；焦距越大，視角越窄。這裡採常見監視器近似值。</div>
+          <div class="field-note">焦距越小，視角越廣；焦距越大，視角越窄。這裡採常見監視器近似值。若前方有牆或柱，視域會自動被遮擋，不會穿透。</div>
           <div class="two-col">
             <label>顏色分類<select id="camColor"></select></label>
             <label>分類名稱<input id="camColorLabel" type="text" placeholder="例：原建置 / 增設 / 故障" /></label>
@@ -178,7 +178,7 @@
     </aside>
   </main>
 
-  <footer class="footer-note">V1.7｜昱拓弱電有限公司｜鏡頭 / 模組可拖曳移動與固定位置｜項目清單分類篩選｜牆體折線建立｜圖紙比例等比映射</footer>
+  <footer class="footer-note">V1.8｜昱拓弱電有限公司｜鏡頭 / 模組可拖曳移動與固定位置｜項目清單分類篩選｜牆體折線建立｜圖紙比例等比映射</footer>
 
   <script type="importmap">
   {
