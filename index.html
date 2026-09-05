@@ -13,12 +13,12 @@
       <div>
         <div class="brand-row">
           <h1>昱拓弱電有限公司｜社區地下室 CCTV 3D 規劃</h1>
-          <span class="version-badge" id="versionBadge">V1.28</span>
+          <span class="version-badge" id="versionBadge">V1.29</span>
         </div>
         <p>社區資料夾・Google Sheets 雲端資料庫・啟動流程視窗・高優先錯誤視窗</p>
       </div>
     </div>
-    <div class="status"><span class="dot"></span><span id="statusText">B1 模型已載入｜版本 V1.28</span></div>
+    <div class="status"><span class="dot"></span><span id="statusText">B1 模型已載入｜版本 V1.29</span></div>
   </header>
 
   <nav class="floor-tabs" aria-label="地下室樓層">
@@ -57,7 +57,7 @@
         <span>滾輪縮放</span>
         <span>牆體：連續點位；點回起點自動完成，Enter 可結束開放牆，Esc 取消</span>
         <span>視角：顯示實際可見光影範圍，牆柱與車機車遮擋不穿透</span><span>圖紙比例：X/Z 同比例映射＋兩點實尺校正</span>
-        <span>版本：<b id="footerVersionInline">V1.28</b></span>
+        <span>版本：<b id="footerVersionInline">V1.29</b></span>
       </div>
     </section>
 
@@ -224,22 +224,15 @@
       </div>
     </div>
   </div>
-
-  <div id="systemModal" class="system-modal hidden" role="dialog" aria-modal="true" aria-labelledby="systemModalTitle">
-    <div class="system-modal-card">
-      <div class="system-modal-head">
-        <div>
-          <div class="modal-eyebrow" id="systemModalEyebrow">SYSTEM</div>
-          <h3 id="systemModalTitle">系統訊息</h3>
-        </div>
-        <button id="systemModalClose" class="modal-close" aria-label="關閉">×</button>
+  <div id="startupStatusCard" class="startup-status-card hidden" aria-live="polite">
+    <div class="startup-card-head">
+      <div>
+        <div class="startup-card-eyebrow">SYSTEM STATUS</div>
+        <strong>系統啟動與資料載入</strong>
       </div>
-      <div id="systemModalBody" class="system-modal-body"></div>
-      <div class="system-modal-actions">
-        <button id="systemModalCopy" class="mini-btn hidden">複製錯誤資訊</button>
-        <button id="systemModalOk" class="mini-btn accent">確定</button>
-      </div>
+      <button id="startupStatusClose" class="startup-card-close" aria-label="關閉">×</button>
     </div>
+    <div id="startupStatusBody" class="startup-card-body"></div>
   </div>
 
   <div id="projectStorageModal" class="system-modal hidden" role="dialog" aria-modal="true" aria-labelledby="projectStorageModalTitle">
@@ -266,12 +259,11 @@
             <span id="localSavedCount" class="mini-badge">0 筆</span>
           </div>
           <div class="two-col storage-folder-row">
-            <label>資料夾<select id="localProjectFolder"></select></label>
+            <label>要存去哪裡<select id="localProjectFolder"></select></label>
             
           </div>
           <div class="drawer-actions">
             <button id="localNewFolderBtn" class="mini-btn accent2">＋ 新增資料夾</button>
-            <button id="localDeleteFolderBtn" class="mini-btn">刪除資料夾</button>
             
             <button id="saveLocalProjectBtn" class="mini-btn accent">儲存到本地</button>
           </div>
@@ -290,14 +282,13 @@
             <span id="savedCount" class="mini-badge">0 筆</span>
           </div>
           <div class="two-col storage-folder-row">
-            <label>資料夾<select id="projectFolder"></select></label>
+            <label>要存去哪裡<select id="projectFolder"></select></label>
             
           </div>
           <div class="drawer-actions">
             <button id="newFolderBtn" class="mini-btn accent2">＋ 新增資料夾</button>
-            <button id="deleteFolderBtn" class="mini-btn">刪除資料夾</button>
             
-            <button id="saveProjectBtn" class="mini-btn accent">儲存到雲端</button>
+            <button id="saveProjectBtn" class="mini-btn accent">儲存</button>
             <button id="refreshCloudBtn" class="mini-btn">重新整理</button>
           </div>
           <div class="field-note">雲端專案存放在 Google Sheets。每一個雲端專案可個別鎖定，鎖定狀態同步保存到雲端，鎖定後不能刪除。</div>
@@ -316,7 +307,7 @@
     </div>
   </div>
 
-  <footer class="footer-note">V1.28｜昱拓弱電有限公司｜Apps Script 舊版相容｜雲端資料夾 API 檢查｜儲存紀錄可直接開啟｜錯誤視窗最高優先｜專案儲存浮動視窗｜本地 / 雲端雙儲存｜專案檔個別鎖定防誤刪</footer>
+  <footer class="footer-note">V1.29｜昱拓弱電有限公司｜專案儲存：專案名稱 / 儲存位置 / 新增資料夾｜雲端儲存按鈕簡化｜啟動流程改右上角小卡提示</footer>
 
   <script type="importmap">
   {

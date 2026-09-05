@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-const APP_VERSION = 'V1.28';
+const APP_VERSION = 'V1.29';
 const DEFAULT_COMMUNITY_ID = 'hualong-chao-plus';
 const CATALOG_KEY = 'cctv3d-site-catalog-v1-24';
 const WORKING_KEY = 'cctv3d-working-v1-24';
@@ -44,7 +44,7 @@ const els = {
   communitySelect:$('communitySelect'), floorSelect:$('floorSelect'), floorPlanInfo:$('floorPlanInfo'),
   scaleBadge:$('scaleBadge'), calibrationMeters:$('calibrationMeters'), calibrationWorld:$('calibrationWorld'), calibrationStatus:$('calibrationStatus'),
   cloudStatusBadge:$('cloudStatusBadge'), apiStatusText:$('apiStatusText'),
-  systemModal:$('systemModal'), systemModalTitle:$('systemModalTitle'), systemModalEyebrow:$('systemModalEyebrow'), systemModalBody:$('systemModalBody'), systemModalClose:$('systemModalClose'), systemModalOk:$('systemModalOk'), systemModalCopy:$('systemModalCopy'),
+  startupStatusCard:$('startupStatusCard'), startupStatusBody:$('startupStatusBody'), startupStatusClose:$('startupStatusClose'),
   errorModal:$('errorModal'), errorModalTitle:$('errorModalTitle'), errorModalBody:$('errorModalBody'), errorModalClose:$('errorModalClose'), errorModalOk:$('errorModalOk'), errorModalCopy:$('errorModalCopy')
 };
 const floorTabsNav = document.querySelector('.floor-tabs');
@@ -57,45 +57,54 @@ const startupFlow = {
   local:{name:'本機資料',status:'waiting',detail:'等待載入…'},
   plan:{name:'樓層圖面',status:'waiting',detail:'等待載入…'},
   api:{name:'工作表1!B1 API',status:'waiting',detail:'等待讀取…'},
-  ping:{name:'Apps Script 連線',status:'waiting',detail:'等待測試…'},
-  cloud:{name:'雲端專案清單',status:'waiting',detail:'等待讀取…'}
+  ping:{name:'Apps Script',status:'waiting',detail:'等待測試…'},
+  cloud:{name:'雲端專案',status:'waiting',detail:'等待讀取…'}
 };
+let startupHideTimer=null;
 
 function modalIcon(status){
-  return status==='done'?'✓':status==='error'?'✕':status==='loading'?'●':'○';
+  return status==='done'?'✓':status==='error'?'!':status==='loading'?'●':'○';
 }
 
-function renderStartupModal(){
+function renderStartupCard(){
+  if(!els.startupStatusCard || !els.startupStatusBody) return;
   const rows=Object.values(startupFlow).map(s =>
-    `<div class="flow-row ${s.status}">
-      <div class="flow-icon">${modalIcon(s.status)}</div>
-      <div class="flow-name">${esc(s.name)}</div>
-      <div class="flow-detail">${esc(s.detail)}</div>
+    `<div class="startup-mini-row ${s.status}">
+      <div class="status-icon">${modalIcon(s.status)}</div>
+      <div class="status-name">${esc(s.name)}</div>
+      <div class="status-detail" title="${esc(s.detail)}">${esc(s.detail)}</div>
     </div>`
   ).join('');
+  els.startupStatusBody.innerHTML=rows;
+  els.startupStatusCard.classList.remove('hidden');
 
-  els.systemModalEyebrow.textContent='STARTUP FLOW';
-  els.systemModalTitle.textContent='系統啟動與資料載入';
-  els.systemModalBody.innerHTML=
-    `<p class="startup-summary">網站正在確認目前專案資料與雲端連線狀態。每個步驟都會在這裡顯示結果。</p>
-     <div class="flow-list">${rows}</div>`;
+  const states=Object.values(startupFlow).map(s=>s.status);
+  const hasError=states.includes('error');
+  const allDone=states.every(s=>s.status==='done');
+  els.startupStatusCard.classList.toggle('has-error',hasError);
+  els.startupStatusCard.classList.toggle('all-done',allDone);
 
-  els.systemModal.querySelector('.system-modal-card')?.classList.remove('error');
-  els.systemModalCopy.classList.add('hidden');
-  els.systemModalOk.textContent='關閉';
-  els.systemModal.classList.remove('hidden');
+  clearTimeout(startupHideTimer);
+  if(allDone&&!hasError){
+    startupHideTimer=setTimeout(()=>els.startupStatusCard.classList.add('hidden'),3500);
+  }
 }
 
 function setStartupStep(key,status,detail){
   if(!startupFlow[key]) return;
   startupFlow[key].status=status;
   startupFlow[key].detail=detail||'';
-  // 啟動流程可以持續更新，但錯誤視窗使用另一個最高層 modal，不會再被覆蓋。
-  renderStartupModal();
+  renderStartupCard();
 }
 
-function closeSystemModal(){
-  els.systemModal.classList.add('hidden');
+function showStartupCard(){
+  renderStartupCard();
+}
+if(els.startupStatusClose){
+  els.startupStatusClose.onclick=()=>{
+    clearTimeout(startupHideTimer);
+    els.startupStatusCard.classList.add('hidden');
+  };
 }
 
 function closeErrorModal(){
@@ -124,11 +133,6 @@ ${message}${context?`\n\n位置：${context}`:''}${stack?`\n\n${stack}`:''}`;
   document.body.classList.add('has-critical-error');
 }
 
-els.systemModalClose.onclick=closeSystemModal;
-els.systemModalOk.onclick=closeSystemModal;
-els.systemModal.onclick=e=>{
-  if(e.target===els.systemModal) closeSystemModal();
-};
 
 els.errorModalClose.onclick=closeErrorModal;
 els.errorModalOk.onclick=closeErrorModal;
@@ -787,15 +791,13 @@ async function refreshCloudProjects(forceApi=false){
       setStartupStep('cloud','done',`已載入 ${cloudProjects.length} 個雲端專案｜目前使用舊 API 相容模式`);
       renderCloudProjects();
       // 不把整個網站判定為失敗；只有資料夾新增/刪除功能暫時不可用。
-      const nf=$('newFolderBtn'),df=$('deleteFolderBtn');
+      const nf=$('newFolderBtn');
       if(nf) nf.disabled=true;
-      if(df) df.disabled=true;
       return;
     }
 
-    const nf=$('newFolderBtn'),df=$('deleteFolderBtn');
+    const nf=$('newFolderBtn');
     if(nf) nf.disabled=false;
-    if(df) df.disabled=false;
     setCloudStatus(true,`API 來源：工作表1!B1｜連線正常｜${cloudProjects.length} 個雲端專案`);
     setStartupStep('cloud','done',`已載入 ${cloudProjects.length} 個雲端專案 / ${cloudFolders.length} 個資料夾`);
     renderCloudProjects();
@@ -827,10 +829,8 @@ window.addEventListener('keydown',e=>{if(e.key==='Escape'&&!els.projectStorageMo
 els.localProjectFolder.onchange=()=>{updateFolderStateUI();renderLocalProjects();};
 els.projectFolder.onchange=()=>{updateFolderStateUI();renderCloudProjects();};
 $('localNewFolderBtn').onclick=()=>addFolderFor(els.localProjectFolder);
-$('localDeleteFolderBtn').onclick=()=>deleteFolderFor(els.localProjectFolder);
 
 $('newFolderBtn').onclick=async()=>{const name=prompt('輸入新的雲端資料夾名稱：');if(!name?.trim())return;try{const r=await apiPost({action:'saveFolder',name:name.trim()});if(!r?.ok)throw new Error(r?.message||'新增資料夾失敗');await refreshCloudProjects();if(r.folder?.folderId)els.projectFolder.value=r.folder.folderId;renderCloudProjects();}catch(err){showErrorModal('新增雲端資料夾失敗',err,'Google Sheets 資料夾');}};
-$('deleteFolderBtn').onclick=async()=>{const f=selectedCloudFolder();if(f.folderId==='root'){alert('「我的專案」為預設資料夾，不能刪除。');return;}const count=cloudProjects.filter(p=>(p.folder||'我的專案')===f.name).length;if(count){alert(`資料夾「${f.name}」內仍有 ${count} 筆雲端專案，請先刪除專案。`);return;}if(!confirm(`確定刪除雲端資料夾「${f.name}」？`))return;try{const r=await apiPost({action:'deleteFolder',folderId:f.folderId});if(!r?.ok)throw new Error(r?.message||'刪除資料夾失敗');await refreshCloudProjects();}catch(err){showErrorModal('刪除雲端資料夾失敗',err,'Google Sheets 資料夾');}};
 
 
 function saveProjectLocal(){
@@ -915,7 +915,7 @@ function animate(){
 }
 
 async function startup(){
-  renderStartupModal();
+  showStartupCard();
   try{
     setStartupStep('local','loading','正在讀取瀏覽器本機專案與設定…');
     const localCamCount=Object.values(state.cameras||{}).reduce((n,x)=>n+(Array.isArray(x)?x.length:0),0);
