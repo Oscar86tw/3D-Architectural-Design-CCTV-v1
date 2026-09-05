@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-const APP_VERSION = 'V1.39';
+const APP_VERSION = 'V1.41';
 const DEFAULT_COMMUNITY_ID = 'hualong-chao-plus';
 const CATALOG_KEY = 'cctv3d-site-catalog-v1-24';
 const WORKING_KEY = 'cctv3d-working-v1-24';
@@ -784,7 +784,8 @@ async function apiGet(action,params={}){
 
 async function apiPost(body){
   const base=await getApiUrlFromSheet();
-  const frameName=`cctvPostFrame_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const requestId=`post_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const frameName=`cctvPostFrame_${requestId}`;
 
   return await new Promise((resolve,reject)=>{
     const iframe=document.createElement('iframe');
@@ -796,52 +797,58 @@ async function apiPost(body){
     form.action=base;
     form.target=frameName;
     form.style.display='none';
+    form.acceptCharset='UTF-8';
 
     const payload=document.createElement('input');
     payload.type='hidden';
     payload.name='payload';
     payload.value=JSON.stringify(body||{});
-    form.appendChild(payload);
 
+    const req=document.createElement('input');
+    req.type='hidden';
+    req.name='requestId';
+    req.value=requestId;
+
+    form.appendChild(payload);
+    form.appendChild(req);
     document.body.appendChild(iframe);
     document.body.appendChild(form);
 
-    let submitted=false;
     let settled=false;
 
     const cleanup=()=>{
+      window.removeEventListener('message',onMessage);
       setTimeout(()=>{
         form.remove();
         iframe.remove();
       },300);
     };
 
-    const timeout=setTimeout(()=>{
+    const finish=(fn,value)=>{
       if(settled)return;
       settled=true;
+      clearTimeout(timeout);
       cleanup();
-      reject(new Error(`POST ${body?.action||''} 執行逾時`));
-    },12000);
-
-    iframe.onload=async()=>{
-      if(!submitted)return;
-      if(settled)return;
-      // Cross-origin iframe 內容不可讀；以 GET 驗證後續狀態。
-      try{
-        await new Promise(r=>setTimeout(r,700));
-        settled=true;
-        clearTimeout(timeout);
-        cleanup();
-        resolve({ok:true,submitted:true});
-      }catch(err){
-        settled=true;
-        clearTimeout(timeout);
-        cleanup();
-        reject(err);
-      }
+      fn(value);
     };
 
-    submitted=true;
+    const onMessage=(event)=>{
+      const data=event.data||{};
+      if(data.type!=='CCTV_FORM_POST_RESULT' || data.requestId!==requestId)return;
+
+      if(data.result?.ok===false){
+        finish(reject,new Error(data.result.message||`POST ${body?.action||''} 執行失敗`));
+        return;
+      }
+      finish(resolve,data.result||{ok:true});
+    };
+
+    window.addEventListener('message',onMessage);
+
+    const timeout=setTimeout(()=>{
+      finish(reject,new Error(`POST ${body?.action||''} 執行逾時；Apps Script 沒有回傳處理結果。`));
+    },30000);
+
     form.submit();
   });
 }
@@ -937,7 +944,7 @@ async function refreshCloudProjects(forceApi=false){
     setCloudStatus(false,`API 來源：工作表1!B1｜${err.message}`);
     els.projectList.innerHTML='<div class="empty-list">雲端連線失敗，請確認工作表1!B1、分享權限與 Apps Script 部署權限。</div>';
     els.savedCount.textContent='0 筆';
-    showErrorModal('Google Drive 雲端連線失敗',err,'Apps Script Bridge / 工作表1!B1');
+    showErrorModal('Google Drive 雲端連線失敗',err,'Apps Script Web App / 工作表1!B1');
   }
 }
 function renderStore(){renderFolderOptions();renderCloudFolderOptions();renderLocalProjects();renderCloudProjects();}
@@ -965,10 +972,12 @@ $('newFolderBtn').onclick=async()=>{
   try{
     const folderName=name.trim();
     els.statusText.textContent=`正在 Google Drive 建立資料夾：${folderName}…`;
-    await apiPost({action:'saveFolder',name:folderName});
+    const result=await apiPost({action:'saveFolder',name:folderName});
+    if(!result?.ok)throw new Error(result?.message||'新增 Google Drive 資料夾失敗');
+    if(!result.folder?.folderId)throw new Error('Apps Script 沒有回傳 Google Drive 資料夾 ID');
     await refreshCloudProjects();
-    const found=cloudFolders.find(f=>f.name===folderName);
-    if(!found)throw new Error('已送出新增資料夾要求，但 Google Drive 尚未出現該資料夾。');
+    const found=cloudFolders.find(f=>f.folderId===result.folder.folderId||f.name===folderName);
+    if(!found)throw new Error('Apps Script 回報資料夾已建立，但重新讀取 Drive 後仍找不到。');
     els.projectFolder.value=found.folderId;
     renderCloudProjects();
     els.statusText.textContent=`Google Drive 資料夾已建立：${folderName}`;
