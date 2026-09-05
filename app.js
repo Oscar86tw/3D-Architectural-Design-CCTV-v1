@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-const APP_VERSION = 'V1.18';
+const APP_VERSION = 'V1.19';
 const DEFAULT_COMMUNITY_ID = 'hualong-chao-plus';
-const CATALOG_KEY = 'cctv3d-site-catalog-v1-18';
-const WORKING_KEY = 'cctv3d-working-v1-18';
-const STORE_KEY = 'cctv3d-project-store-v1-18';
-const PREV_STORE_KEYS = ['cctv3d-project-store-v1-17','cctv3d-project-store-v1-16','cctv3d-project-store-v1-15','cctv3d-project-store-v1-14','cctv3d-project-store-v1-13','cctv3d-project-store-v1-12','cctv3d-project-store-v1-11','cctv3d-project-store-v1-10','cctv3d-project-store-v1-9','cctv3d-project-store-v1-8','cctv3d-project-store-v1-7','cctv3d-project-store-v1-6'];
+const CATALOG_KEY = 'cctv3d-site-catalog-v1-19';
+const WORKING_KEY = 'cctv3d-working-v1-19';
+const STORE_KEY = 'cctv3d-project-store-v1-19';
+const PREV_STORE_KEYS = ['cctv3d-project-store-v1-18','cctv3d-project-store-v1-17','cctv3d-project-store-v1-16','cctv3d-project-store-v1-15','cctv3d-project-store-v1-14','cctv3d-project-store-v1-13','cctv3d-project-store-v1-12','cctv3d-project-store-v1-11','cctv3d-project-store-v1-10','cctv3d-project-store-v1-9','cctv3d-project-store-v1-8','cctv3d-project-store-v1-7','cctv3d-project-store-v1-6'];
 const GOOGLE_DRIVE_PROJECT_URL = 'https://drive.google.com/drive/folders/1FWduBvqlTmr1oTipmqR3sywO2VUCFq9i?usp=drive_link';
 const GOOGLE_SHEET_PROJECT_URL = 'https://docs.google.com/spreadsheets/d/1-jy-MWBXMyx92xZ-RTnwqpB-j7cMnlOIB2i1lh2eUZg/edit?usp=sharing';
 const GOOGLE_SHEET_ID = '1-jy-MWBXMyx92xZ-RTnwqpB-j7cMnlOIB2i1lh2eUZg';
@@ -59,7 +59,15 @@ els.footerVersionInline.textContent = APP_VERSION;
 Object.entries(CAMERA_COLOR_PRESETS).forEach(([key, info]) => {
   const opt = document.createElement('option'); opt.value = key; opt.textContent = `${info.label}（${key}）`; camInputs.color.appendChild(opt);
 });
-els.cameraLegend.innerHTML = Object.entries(CAMERA_COLOR_PRESETS).map(([,info]) => `<span class="legend-chip"><span class="legend-dot" style="background:#${info.body.toString(16).padStart(6,'0')}"></span>${info.label}</span>`).join('');
+function renderCameraLegend(){
+  const counts = Object.fromEntries(Object.keys(CAMERA_COLOR_PRESETS).map(k => [k, 0]));
+  currentCameras().forEach(cam => { counts[cam.colorKey] = (counts[cam.colorKey] || 0) + 1; });
+  els.cameraLegend.innerHTML = Object.entries(CAMERA_COLOR_PRESETS).map(([key,info]) => {
+    const count = counts[key] || 0;
+    return `<span class="legend-chip"><span class="legend-dot" style="background:#${info.body.toString(16).padStart(6,'0')}"></span>${info.label} <strong>${count}</strong></span>`;
+  }).join('');
+}
+renderCameraLegend();
 
 function defaultCatalog(){
   return { communities:[{ id:DEFAULT_COMMUNITY_ID, name:'樺龍潮+ 社區', floors:[
@@ -69,7 +77,7 @@ function defaultCatalog(){
 }
 function loadCatalog(){
   try{
-    const parsed = JSON.parse(localStorage.getItem(CATALOG_KEY) || localStorage.getItem('cctv3d-site-catalog-v1-17') || localStorage.getItem('cctv3d-site-catalog-v1-16') || localStorage.getItem('cctv3d-site-catalog-v1-15') || localStorage.getItem('cctv3d-site-catalog-v1-14') || localStorage.getItem('cctv3d-site-catalog-v1-13') || localStorage.getItem('cctv3d-site-catalog-v1-12') || localStorage.getItem('cctv3d-site-catalog-v1-11') || localStorage.getItem('cctv3d-site-catalog-v1-10') || localStorage.getItem('cctv3d-site-catalog-v1-9') || 'null');
+    const parsed = JSON.parse(localStorage.getItem(CATALOG_KEY) || localStorage.getItem('cctv3d-site-catalog-v1-18') || localStorage.getItem('cctv3d-site-catalog-v1-17') || localStorage.getItem('cctv3d-site-catalog-v1-16') || localStorage.getItem('cctv3d-site-catalog-v1-15') || localStorage.getItem('cctv3d-site-catalog-v1-14') || localStorage.getItem('cctv3d-site-catalog-v1-13') || localStorage.getItem('cctv3d-site-catalog-v1-12') || localStorage.getItem('cctv3d-site-catalog-v1-11') || localStorage.getItem('cctv3d-site-catalog-v1-10') || localStorage.getItem('cctv3d-site-catalog-v1-9') || 'null');
     if(parsed?.communities?.length) return parsed;
   }catch{}
   const d = defaultCatalog(); localStorage.setItem(CATALOG_KEY, JSON.stringify(d)); return d;
@@ -101,7 +109,7 @@ function migrateFlatData(raw){
 function loadWorking(){
   const base = { communityId:DEFAULT_COMMUNITY_ID, floor:'B1', showPlan:true, listFilter:'camera', cameras:{}, modules:{}, calibrations:{}, selected:{kind:'camera',id:null} };
   try{
-    const raw = JSON.parse(localStorage.getItem(WORKING_KEY) || localStorage.getItem('cctv3d-working-v1-17') || localStorage.getItem('cctv3d-working-v1-16') || localStorage.getItem('cctv3d-working-v1-15') || localStorage.getItem('cctv3d-working-v1-14') || localStorage.getItem('cctv3d-working-v1-13') || localStorage.getItem('cctv3d-working-v1-12') || localStorage.getItem('cctv3d-working-v1-11') || localStorage.getItem('cctv3d-working-v1-10') || localStorage.getItem('cctv3d-working-v1-9') || 'null');
+    const raw = JSON.parse(localStorage.getItem(WORKING_KEY) || localStorage.getItem('cctv3d-working-v1-18') || localStorage.getItem('cctv3d-working-v1-17') || localStorage.getItem('cctv3d-working-v1-16') || localStorage.getItem('cctv3d-working-v1-15') || localStorage.getItem('cctv3d-working-v1-14') || localStorage.getItem('cctv3d-working-v1-13') || localStorage.getItem('cctv3d-working-v1-12') || localStorage.getItem('cctv3d-working-v1-11') || localStorage.getItem('cctv3d-working-v1-10') || localStorage.getItem('cctv3d-working-v1-9') || 'null');
     if(raw) return { ...base, ...raw, cameras:migrateFlatData(raw.cameras), modules:migrateFlatData(raw.modules), calibrations:raw.calibrations || {} };
     const prev = JSON.parse(localStorage.getItem('cctv3d-working-v1-8') || localStorage.getItem('cctv3d-working-v1-7') || 'null');
     if(prev){
@@ -419,6 +427,7 @@ function refreshUI(){
   els.listFilter.value=state.listFilter;
   els.cameraCount.textContent=currentCameras().length;
   els.moduleCount.textContent=currentModules().length;
+  renderCameraLegend();
   const c=selCamera(),m=selModule();
   els.selectedFov.textContent=c?`${c.fov}°`:'—';
   els.selectedType.textContent=c?'鏡頭':m?moduleTypeLabel(m):'—';

@@ -2,9 +2,9 @@
 
 昱拓弱電有限公司｜社區地下室 CCTV 3D 規劃。
 
-## 目前版本 V1.18
+## 目前版本 V1.19
 
-### V1.18 雲端整合
+### V1.19 雲端整合
 - Google Sheets：`1-jy-MWBXMyx92xZ-RTnwqpB-j7cMnlOIB2i1lh2eUZg`
 - API 有效端點來源固定為：`工作表1!B1`
 - 前端不永久寫死 Apps Script `/exec` 網址。
