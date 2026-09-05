@@ -13,12 +13,12 @@
       <div>
         <div class="brand-row">
           <h1>昱拓弱電有限公司｜社區地下室 CCTV 3D 規劃</h1>
-          <span class="version-badge" id="versionBadge">V1.21</span>
+          <span class="version-badge" id="versionBadge">V1.23</span>
         </div>
         <p>社區資料夾・Google Sheets 雲端資料庫・啟動流程視窗・錯誤訊息視窗</p>
       </div>
     </div>
-    <div class="status"><span class="dot"></span><span id="statusText">B1 模型已載入｜版本 V1.21</span></div>
+    <div class="status"><span class="dot"></span><span id="statusText">B1 模型已載入｜版本 V1.23</span></div>
   </header>
 
   <nav class="floor-tabs" aria-label="地下室樓層">
@@ -57,7 +57,7 @@
         <span>滾輪縮放</span>
         <span>牆體：連續點位；點回起點自動完成，Enter 可結束開放牆，Esc 取消</span>
         <span>視角：顯示實際可見光影範圍，牆柱與車機車遮擋不穿透</span><span>圖紙比例：X/Z 同比例映射＋兩點實尺校正</span>
-        <span>版本：<b id="footerVersionInline">V1.21</b></span>
+        <span>版本：<b id="footerVersionInline">V1.23</b></span>
       </div>
     </section>
 
@@ -120,52 +120,13 @@
         <div id="calibrationStatus" class="field-note">尚未校正。先在圖紙上選兩個有已知實際距離的點位。</div>
       </section>
 
-      <section class="panel-section" id="projectStorage">
+      <section class="panel-section" id="projectStorageLauncher">
         <div class="section-heading row-between">
           <span>專案儲存</span>
           <span id="cloudStatusBadge" class="mini-badge">雲端連線中</span>
         </div>
-        <div class="two-col">
-          <label>儲存位置<select id="projectFolder"></select></label>
-          <label>專案名稱<input id="projectName" type="text" placeholder="例：A社區 CCTV 改善案" /></label>
-        </div>
-        <div class="drawer-actions">
-          <button id="newFolderBtn" class="mini-btn accent2">＋ 新增資料夾</button>
-          <button id="deleteFolderBtn" class="mini-btn">刪除資料夾</button>
-          <button id="saveProjectBtn" class="mini-btn accent">儲存到雲端</button>
-        </div>
-        <div class="drawer-actions file-actions">
-          <button id="exportProjectBtn" class="mini-btn accent">匯出專案檔</button>
-          <button id="importProjectBtn" class="mini-btn accent2">匯入專案檔</button>
-          <input id="importProjectFile" type="file" accept=".json,.utop3d" hidden />
-        </div>
-        <div class="section-heading row-between top-gap">
-          <span>Google Drive 儲存 / 開啟路徑</span>
-          <span class="mini-badge">雲端資料夾</span>
-        </div>
-        <div class="drawer-actions">
-          <button id="openDriveFolderBtn" class="mini-btn accent2">開啟 Google Drive 資料夾</button>
-          <button id="copyDriveFolderBtn" class="mini-btn">複製路徑</button>
-        </div>
-        <div id="driveFolderPath" class="field-note">https://drive.google.com/drive/folders/1FWduBvqlTmr1oTipmqR3sywO2VUCFq9i?usp=drive_link</div>
-        <div class="field-note">此 Google Drive 資料夾已設為專案預設開啟路徑。匯出 .utop3d 後可直接開啟此資料夾上傳；若要做到按一下就直接寫入 Google Drive，需要再加入 Google Drive API / OAuth 授權。</div>
-        <div class="section-heading row-between top-gap">
-          <span>專案 EXCEL / Google Sheets</span>
-          <span class="mini-badge">雲端資料庫</span>
-        </div>
-        <div class="drawer-actions">
-          <button id="openProjectSheetBtn" class="mini-btn accent">開啟專案 EXCEL</button>
-          <button id="refreshCloudBtn" class="mini-btn accent2">重新整理雲端專案</button>
-          <button id="reloadApiBtn" class="mini-btn">重新讀取 B1 API</button>
-        </div>
-        <div id="projectSheetPath" class="field-note">https://docs.google.com/spreadsheets/d/1-jy-MWBXMyx92xZ-RTnwqpB-j7cMnlOIB2i1lh2eUZg/edit?usp=sharing</div>
-        <div id="apiStatusText" class="field-note">API 來源：工作表1!B1｜正在讀取目前有效 /exec 網址…</div>
-        <div class="field-note">前端不固定寫死 Apps Script 網址。每次重新部署 API，只要更新「工作表1!B1」，網站重新整理後就會使用新的 /exec 端點。</div>
-        <div class="section-heading row-between top-gap">
-          <span>雲端已儲存專案</span>
-          <span id="savedCount" class="mini-badge">0 筆</span>
-        </div>
-        <div id="projectList" class="item-list"><div class="empty-list">正在讀取 Google Sheets 雲端專案…</div></div>
+        <p class="field-note">平常保持收合，需要儲存、讀取或整理資料夾時再開啟。</p>
+        <button id="openProjectStorageBtn" class="primary-button storage-launch-btn">開啟專案儲存</button>
       </section>
 
       <section class="panel-section" id="moduleDrawer">
@@ -263,7 +224,81 @@
     </div>
   </div>
 
-  <footer class="footer-note">V1.21｜昱拓弱電有限公司｜啟動載入流程視窗｜全域錯誤訊息視窗｜Google Sheets 雲端儲存 / 開啟 / 刪除｜API 來源：工作表1!B1</footer>
+  <div id="projectStorageModal" class="system-modal hidden" role="dialog" aria-modal="true" aria-labelledby="projectStorageModalTitle">
+    <div class="system-modal-card project-storage-modal-card">
+      <div class="system-modal-head">
+        <div>
+          <div class="modal-eyebrow">PROJECT STORAGE</div>
+          <h3 id="projectStorageModalTitle">專案儲存</h3>
+        </div>
+        <button id="closeProjectStorageBtn" class="modal-close" aria-label="關閉">×</button>
+      </div>
+      <div class="system-modal-body storage-modal-body">
+        <div class="storage-name-row">
+          <label>專案名稱<input id="projectName" type="text" placeholder="例：樺龍潮+ CCTV 改善案" /></label>
+        </div>
+        <div class="storage-tabs" role="tablist">
+          <button id="localStorageTab" class="storage-tab active" data-storage-tab="local">本地儲存</button>
+          <button id="cloudStorageTab" class="storage-tab" data-storage-tab="cloud">雲端儲存</button>
+        </div>
+
+        <section id="localStoragePanel" class="storage-panel">
+          <div class="section-heading row-between">
+            <span>本地儲存</span>
+            <span id="localSavedCount" class="mini-badge">0 筆</span>
+          </div>
+          <div class="two-col storage-folder-row">
+            <label>資料夾<select id="localProjectFolder"></select></label>
+            <div class="folder-state-box"><span>資料夾狀態</span><b id="localFolderState">未鎖定</b></div>
+          </div>
+          <div class="drawer-actions">
+            <button id="localNewFolderBtn" class="mini-btn accent2">＋ 新增資料夾</button>
+            <button id="localDeleteFolderBtn" class="mini-btn">刪除資料夾</button>
+            <button id="localLockFolderBtn" class="mini-btn warn">🔒 鎖住資料夾</button>
+            <button id="saveLocalProjectBtn" class="mini-btn accent">儲存到本地</button>
+          </div>
+          <div class="drawer-actions file-actions">
+            <button id="exportProjectBtn" class="mini-btn accent">匯出專案檔</button>
+            <button id="importProjectBtn" class="mini-btn accent2">匯入專案檔</button>
+            <input id="importProjectFile" type="file" accept=".json,.utop3d" hidden />
+          </div>
+          <div class="field-note">本地儲存在目前瀏覽器。鎖住資料夾後，可避免誤刪資料夾與其專案。</div>
+          <div id="localProjectList" class="item-list"><div class="empty-list">尚無本地專案</div></div>
+        </section>
+
+        <section id="cloudStoragePanel" class="storage-panel hidden">
+          <div class="section-heading row-between">
+            <span>雲端儲存</span>
+            <span id="savedCount" class="mini-badge">0 筆</span>
+          </div>
+          <div class="two-col storage-folder-row">
+            <label>資料夾<select id="projectFolder"></select></label>
+            <div class="folder-state-box"><span>資料夾狀態</span><b id="cloudFolderState">未鎖定</b></div>
+          </div>
+          <div class="drawer-actions">
+            <button id="newFolderBtn" class="mini-btn accent2">＋ 新增資料夾</button>
+            <button id="deleteFolderBtn" class="mini-btn">刪除資料夾</button>
+            <button id="cloudLockFolderBtn" class="mini-btn warn">🔒 鎖住資料夾</button>
+            <button id="saveProjectBtn" class="mini-btn accent">儲存到雲端</button>
+            <button id="refreshCloudBtn" class="mini-btn">重新整理</button>
+          </div>
+          <div class="field-note">雲端專案存放在 Google Sheets。鎖住資料夾後，前端會禁止刪除該資料夾與該資料夾內的雲端專案。</div>
+          <div id="projectList" class="item-list"><div class="empty-list">正在讀取雲端專案…</div></div>
+        </section>
+
+        <div class="hidden-system-info">
+          <button id="openDriveFolderBtn"></button><button id="copyDriveFolderBtn"></button>
+          <button id="openProjectSheetBtn"></button><button id="reloadApiBtn"></button>
+          <div id="apiStatusText"></div>
+        </div>
+      </div>
+      <div class="system-modal-actions">
+        <button id="closeProjectStorageBottomBtn" class="mini-btn">關閉</button>
+      </div>
+    </div>
+  </div>
+
+  <footer class="footer-note">V1.23｜昱拓弱電有限公司｜專案儲存浮動視窗｜本地 / 雲端雙儲存｜資料夾新增 / 刪除 / 鎖定｜錯誤與啟動流程訊息</footer>
 
   <script type="importmap">
   {
