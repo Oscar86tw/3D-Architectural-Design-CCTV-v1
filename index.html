@@ -13,12 +13,12 @@
       <div>
         <div class="brand-row">
           <h1>昱拓弱電有限公司｜社區地下室 CCTV 3D 規劃</h1>
-          <span class="version-badge" id="versionBadge">V1.25</span>
+          <span class="version-badge" id="versionBadge">V1.26</span>
         </div>
-        <p>社區資料夾・Google Sheets 雲端資料庫・啟動流程視窗・錯誤訊息視窗</p>
+        <p>社區資料夾・Google Sheets 雲端資料庫・啟動流程視窗・高優先錯誤視窗</p>
       </div>
     </div>
-    <div class="status"><span class="dot"></span><span id="statusText">B1 模型已載入｜版本 V1.25</span></div>
+    <div class="status"><span class="dot"></span><span id="statusText">B1 模型已載入｜版本 V1.26</span></div>
   </header>
 
   <nav class="floor-tabs" aria-label="地下室樓層">
@@ -57,7 +57,7 @@
         <span>滾輪縮放</span>
         <span>牆體：連續點位；點回起點自動完成，Enter 可結束開放牆，Esc 取消</span>
         <span>視角：顯示實際可見光影範圍，牆柱與車機車遮擋不穿透</span><span>圖紙比例：X/Z 同比例映射＋兩點實尺校正</span>
-        <span>版本：<b id="footerVersionInline">V1.25</b></span>
+        <span>版本：<b id="footerVersionInline">V1.26</b></span>
       </div>
     </section>
 
@@ -207,6 +207,24 @@
     </aside>
   </main>
 
+
+  <div id="errorModal" class="system-modal error-priority-modal hidden" role="alertdialog" aria-modal="true" aria-labelledby="errorModalTitle">
+    <div class="system-modal-card error">
+      <div class="system-modal-head">
+        <div>
+          <div class="modal-eyebrow">ERROR</div>
+          <h3 id="errorModalTitle">系統錯誤</h3>
+        </div>
+        <button id="errorModalClose" class="modal-close" aria-label="關閉錯誤訊息">×</button>
+      </div>
+      <div id="errorModalBody" class="system-modal-body"></div>
+      <div class="system-modal-actions">
+        <button id="errorModalCopy" class="mini-btn">複製錯誤資訊</button>
+        <button id="errorModalOk" class="mini-btn accent2">確定</button>
+      </div>
+    </div>
+  </div>
+
   <div id="systemModal" class="system-modal hidden" role="dialog" aria-modal="true" aria-labelledby="systemModalTitle">
     <div class="system-modal-card">
       <div class="system-modal-head">
@@ -298,7 +316,7 @@
     </div>
   </div>
 
-  <footer class="footer-note">V1.25｜昱拓弱電有限公司｜專案儲存浮動視窗｜本地 / 雲端雙儲存｜資料夾新增 / 刪除｜專案檔個別鎖定防誤刪｜錯誤與啟動流程訊息</footer>
+  <footer class="footer-note">V1.26｜昱拓弱電有限公司｜錯誤視窗最高優先｜啟動流程不中斷｜專案儲存浮動視窗｜本地 / 雲端雙儲存｜專案檔個別鎖定防誤刪</footer>
 
   <script type="importmap">
   {

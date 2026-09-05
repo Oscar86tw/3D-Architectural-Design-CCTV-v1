@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-const APP_VERSION = 'V1.25';
+const APP_VERSION = 'V1.26';
 const DEFAULT_COMMUNITY_ID = 'hualong-chao-plus';
 const CATALOG_KEY = 'cctv3d-site-catalog-v1-24';
 const WORKING_KEY = 'cctv3d-working-v1-24';
@@ -44,12 +44,15 @@ const els = {
   communitySelect:$('communitySelect'), floorSelect:$('floorSelect'), floorPlanInfo:$('floorPlanInfo'),
   scaleBadge:$('scaleBadge'), calibrationMeters:$('calibrationMeters'), calibrationWorld:$('calibrationWorld'), calibrationStatus:$('calibrationStatus'),
   cloudStatusBadge:$('cloudStatusBadge'), apiStatusText:$('apiStatusText'),
-  systemModal:$('systemModal'), systemModalTitle:$('systemModalTitle'), systemModalEyebrow:$('systemModalEyebrow'), systemModalBody:$('systemModalBody'), systemModalClose:$('systemModalClose'), systemModalOk:$('systemModalOk'), systemModalCopy:$('systemModalCopy')
+  systemModal:$('systemModal'), systemModalTitle:$('systemModalTitle'), systemModalEyebrow:$('systemModalEyebrow'), systemModalBody:$('systemModalBody'), systemModalClose:$('systemModalClose'), systemModalOk:$('systemModalOk'), systemModalCopy:$('systemModalCopy'),
+  errorModal:$('errorModal'), errorModalTitle:$('errorModalTitle'), errorModalBody:$('errorModalBody'), errorModalClose:$('errorModalClose'), errorModalOk:$('errorModalOk'), errorModalCopy:$('errorModalCopy')
 };
 const floorTabsNav = document.querySelector('.floor-tabs');
 
 
 let lastErrorText = '';
+let errorModalOpen = false;
+
 const startupFlow = {
   local:{name:'本機資料',status:'waiting',detail:'等待載入…'},
   plan:{name:'樓層圖面',status:'waiting',detail:'等待載入…'},
@@ -57,27 +60,107 @@ const startupFlow = {
   ping:{name:'Apps Script 連線',status:'waiting',detail:'等待測試…'},
   cloud:{name:'雲端專案清單',status:'waiting',detail:'等待讀取…'}
 };
-function modalIcon(status){return status==='done'?'✓':status==='error'?'✕':status==='loading'?'●':'○';}
-function renderStartupModal(){
-  const rows=Object.values(startupFlow).map(s=>`<div class="flow-row ${s.status}"><div class="flow-icon">${modalIcon(s.status)}</div><div class="flow-name">${esc(s.name)}</div><div class="flow-detail">${esc(s.detail)}</div></div>`).join('');
-  els.systemModalEyebrow.textContent='STARTUP FLOW';els.systemModalTitle.textContent='系統啟動與資料載入';
-  els.systemModalBody.innerHTML=`<p class="startup-summary">網站正在確認目前專案資料與雲端連線狀態。每個步驟都會在這裡顯示結果。</p><div class="flow-list">${rows}</div>`;
-  els.systemModal.querySelector('.system-modal-card')?.classList.remove('error');els.systemModalCopy.classList.add('hidden');els.systemModalOk.textContent='關閉';els.systemModal.classList.remove('hidden');
+
+function modalIcon(status){
+  return status==='done'?'✓':status==='error'?'✕':status==='loading'?'●':'○';
 }
-function setStartupStep(key,status,detail){if(!startupFlow[key])return;startupFlow[key].status=status;startupFlow[key].detail=detail||'';renderStartupModal();}
-function closeSystemModal(){els.systemModal.classList.add('hidden');}
+
+function renderStartupModal(){
+  const rows=Object.values(startupFlow).map(s =>
+    `<div class="flow-row ${s.status}">
+      <div class="flow-icon">${modalIcon(s.status)}</div>
+      <div class="flow-name">${esc(s.name)}</div>
+      <div class="flow-detail">${esc(s.detail)}</div>
+    </div>`
+  ).join('');
+
+  els.systemModalEyebrow.textContent='STARTUP FLOW';
+  els.systemModalTitle.textContent='系統啟動與資料載入';
+  els.systemModalBody.innerHTML=
+    `<p class="startup-summary">網站正在確認目前專案資料與雲端連線狀態。每個步驟都會在這裡顯示結果。</p>
+     <div class="flow-list">${rows}</div>`;
+
+  els.systemModal.querySelector('.system-modal-card')?.classList.remove('error');
+  els.systemModalCopy.classList.add('hidden');
+  els.systemModalOk.textContent='關閉';
+  els.systemModal.classList.remove('hidden');
+}
+
+function setStartupStep(key,status,detail){
+  if(!startupFlow[key]) return;
+  startupFlow[key].status=status;
+  startupFlow[key].detail=detail||'';
+  // 啟動流程可以持續更新，但錯誤視窗使用另一個最高層 modal，不會再被覆蓋。
+  renderStartupModal();
+}
+
+function closeSystemModal(){
+  els.systemModal.classList.add('hidden');
+}
+
+function closeErrorModal(){
+  errorModalOpen=false;
+  els.errorModal.classList.add('hidden');
+  document.body.classList.remove('has-critical-error');
+}
+
 function showErrorModal(title,error,context=''){
   const message=error instanceof Error?error.message:String(error||'未知錯誤');
   const stack=error instanceof Error&&error.stack?error.stack:'';
-  lastErrorText=`${title}\n${message}${context?`\n\n位置：${context}`:''}${stack?`\n\n${stack}`:''}`;
-  els.systemModalEyebrow.textContent='ERROR';els.systemModalTitle.textContent=title||'系統錯誤';
-  els.systemModalBody.innerHTML=`<div class="error-box"><div class="error-title">發生錯誤</div><div class="error-message">${esc(message)}</div>${context?`<div class="error-meta">位置：${esc(context)}</div>`:''}</div>`;
-  els.systemModal.querySelector('.system-modal-card')?.classList.add('error');els.systemModalCopy.classList.remove('hidden');els.systemModalOk.textContent='確定';els.systemModal.classList.remove('hidden');
+
+  lastErrorText=`${title}
+${message}${context?`\n\n位置：${context}`:''}${stack?`\n\n${stack}`:''}`;
+
+  errorModalOpen=true;
+  els.errorModalTitle.textContent=title||'系統錯誤';
+  els.errorModalBody.innerHTML=
+    `<div class="error-box">
+      <div class="error-title">發生錯誤</div>
+      <div class="error-message">${esc(message)}</div>
+      ${context?`<div class="error-meta">位置：${esc(context)}</div>`:''}
+     </div>`;
+  els.errorModalCopy.textContent='複製錯誤資訊';
+  els.errorModal.classList.remove('hidden');
+  document.body.classList.add('has-critical-error');
 }
-els.systemModalClose.onclick=closeSystemModal;els.systemModalOk.onclick=closeSystemModal;els.systemModal.onclick=e=>{if(e.target===els.systemModal)closeSystemModal();};
-els.systemModalCopy.onclick=async()=>{try{await navigator.clipboard.writeText(lastErrorText);els.systemModalCopy.textContent='已複製';setTimeout(()=>els.systemModalCopy.textContent='複製錯誤資訊',1200);}catch{prompt('請複製錯誤資訊：',lastErrorText);}};
-window.addEventListener('error',e=>{showErrorModal('網頁執行錯誤',e.error||e.message,`${e.filename||'未知檔案'}:${e.lineno||0}:${e.colno||0}`);});
-window.addEventListener('unhandledrejection',e=>{showErrorModal('未處理的系統錯誤',e.reason||'Promise 執行失敗','非同步處理');});
+
+els.systemModalClose.onclick=closeSystemModal;
+els.systemModalOk.onclick=closeSystemModal;
+els.systemModal.onclick=e=>{
+  if(e.target===els.systemModal) closeSystemModal();
+};
+
+els.errorModalClose.onclick=closeErrorModal;
+els.errorModalOk.onclick=closeErrorModal;
+els.errorModal.onclick=e=>{
+  // 錯誤視窗不允許點背景誤關，必須按「確定」或 X。
+  if(e.target===els.errorModal) return;
+};
+els.errorModalCopy.onclick=async()=>{
+  try{
+    await navigator.clipboard.writeText(lastErrorText);
+    els.errorModalCopy.textContent='已複製';
+    setTimeout(()=>els.errorModalCopy.textContent='複製錯誤資訊',1200);
+  }catch{
+    prompt('請複製錯誤資訊：',lastErrorText);
+  }
+};
+
+window.addEventListener('error',e=>{
+  showErrorModal(
+    '網頁執行錯誤',
+    e.error||e.message,
+    `${e.filename||'未知檔案'}:${e.lineno||0}:${e.colno||0}`
+  );
+});
+
+window.addEventListener('unhandledrejection',e=>{
+  showErrorModal(
+    '未處理的系統錯誤',
+    e.reason||'Promise 執行失敗',
+    '非同步處理'
+  );
+});
 
 const camInputs = {
   name:$('camName'), lens:$('camLens'), lensFov:$('camLensFov'), color:$('camColor'), colorLabel:$('camColorLabel'), fixed:$('camFixed'),
@@ -741,6 +824,6 @@ async function startup(){
     setStartupStep('local','done',`社區 ${catalog.communities?.length||0} 個｜本機鏡頭 ${localCamCount} 支｜模組 ${localModCount} 個`);
     buildFloor();renderObjects();refreshUI();renderStore();resize();animate();
     await refreshCloudProjects();
-  }catch(err){showErrorModal('網站啟動失敗',err,'startup');}
+  }catch(err){setStartupStep('cloud','error',err instanceof Error?err.message:String(err));showErrorModal('網站啟動失敗',err,'startup');}
 }
 startup();
