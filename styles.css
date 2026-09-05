@@ -163,3 +163,14 @@ body.has-critical-error{
   align-items:center;
   flex-wrap:wrap;
 }
+
+
+/* V1.30：啟動提示完成後快速自動收起，盡量不遮擋操作畫面 */
+.startup-status-card{
+  max-height:220px;
+  transition:opacity .18s ease, transform .18s ease;
+}
+.startup-status-card.all-done{
+  opacity:.88;
+  transform:translateY(-2px);
+}
