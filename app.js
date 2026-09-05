@@ -1,12 +1,17 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-const APP_VERSION = 'V1.15';
+const APP_VERSION = 'V1.18';
 const DEFAULT_COMMUNITY_ID = 'hualong-chao-plus';
-const CATALOG_KEY = 'cctv3d-site-catalog-v1-15';
-const WORKING_KEY = 'cctv3d-working-v1-15';
-const STORE_KEY = 'cctv3d-project-store-v1-15';
-const PREV_STORE_KEYS = ['cctv3d-project-store-v1-14','cctv3d-project-store-v1-13','cctv3d-project-store-v1-12','cctv3d-project-store-v1-11','cctv3d-project-store-v1-10','cctv3d-project-store-v1-9','cctv3d-project-store-v1-8','cctv3d-project-store-v1-7','cctv3d-project-store-v1-6'];
+const CATALOG_KEY = 'cctv3d-site-catalog-v1-18';
+const WORKING_KEY = 'cctv3d-working-v1-18';
+const STORE_KEY = 'cctv3d-project-store-v1-18';
+const PREV_STORE_KEYS = ['cctv3d-project-store-v1-17','cctv3d-project-store-v1-16','cctv3d-project-store-v1-15','cctv3d-project-store-v1-14','cctv3d-project-store-v1-13','cctv3d-project-store-v1-12','cctv3d-project-store-v1-11','cctv3d-project-store-v1-10','cctv3d-project-store-v1-9','cctv3d-project-store-v1-8','cctv3d-project-store-v1-7','cctv3d-project-store-v1-6'];
+const GOOGLE_DRIVE_PROJECT_URL = 'https://drive.google.com/drive/folders/1FWduBvqlTmr1oTipmqR3sywO2VUCFq9i?usp=drive_link';
+const GOOGLE_SHEET_PROJECT_URL = 'https://docs.google.com/spreadsheets/d/1-jy-MWBXMyx92xZ-RTnwqpB-j7cMnlOIB2i1lh2eUZg/edit?usp=sharing';
+const GOOGLE_SHEET_ID = '1-jy-MWBXMyx92xZ-RTnwqpB-j7cMnlOIB2i1lh2eUZg';
+const API_CONFIG_CSV_URL = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent('工作表1')}&range=B1`;
+const API_CACHE_KEY = 'cctv3d-api-url-cache';
 const PX_TO_UNIT = 0.04; // 所有圖面 X/Z 使用同一縮放係數，不改變圖紙長寬比例
 
 const CAMERA_COLOR_PRESETS = {
@@ -35,7 +40,8 @@ const els = {
   itemList:$('itemList'), listFilter:$('listFilter'), cameraLegend:$('cameraLegend'),
   projectFolder:$('projectFolder'), projectName:$('projectName'), projectList:$('projectList'), savedCount:$('savedCount'),
   communitySelect:$('communitySelect'), floorSelect:$('floorSelect'), floorPlanInfo:$('floorPlanInfo'),
-  scaleBadge:$('scaleBadge'), calibrationMeters:$('calibrationMeters'), calibrationWorld:$('calibrationWorld'), calibrationStatus:$('calibrationStatus')
+  scaleBadge:$('scaleBadge'), calibrationMeters:$('calibrationMeters'), calibrationWorld:$('calibrationWorld'), calibrationStatus:$('calibrationStatus'),
+  cloudStatusBadge:$('cloudStatusBadge'), apiStatusText:$('apiStatusText')
 };
 const floorTabsNav = document.querySelector('.floor-tabs');
 
@@ -63,7 +69,7 @@ function defaultCatalog(){
 }
 function loadCatalog(){
   try{
-    const parsed = JSON.parse(localStorage.getItem(CATALOG_KEY) || localStorage.getItem('cctv3d-site-catalog-v1-14') || localStorage.getItem('cctv3d-site-catalog-v1-13') || localStorage.getItem('cctv3d-site-catalog-v1-12') || localStorage.getItem('cctv3d-site-catalog-v1-11') || localStorage.getItem('cctv3d-site-catalog-v1-10') || localStorage.getItem('cctv3d-site-catalog-v1-9') || 'null');
+    const parsed = JSON.parse(localStorage.getItem(CATALOG_KEY) || localStorage.getItem('cctv3d-site-catalog-v1-17') || localStorage.getItem('cctv3d-site-catalog-v1-16') || localStorage.getItem('cctv3d-site-catalog-v1-15') || localStorage.getItem('cctv3d-site-catalog-v1-14') || localStorage.getItem('cctv3d-site-catalog-v1-13') || localStorage.getItem('cctv3d-site-catalog-v1-12') || localStorage.getItem('cctv3d-site-catalog-v1-11') || localStorage.getItem('cctv3d-site-catalog-v1-10') || localStorage.getItem('cctv3d-site-catalog-v1-9') || 'null');
     if(parsed?.communities?.length) return parsed;
   }catch{}
   const d = defaultCatalog(); localStorage.setItem(CATALOG_KEY, JSON.stringify(d)); return d;
@@ -95,7 +101,7 @@ function migrateFlatData(raw){
 function loadWorking(){
   const base = { communityId:DEFAULT_COMMUNITY_ID, floor:'B1', showPlan:true, listFilter:'camera', cameras:{}, modules:{}, calibrations:{}, selected:{kind:'camera',id:null} };
   try{
-    const raw = JSON.parse(localStorage.getItem(WORKING_KEY) || localStorage.getItem('cctv3d-working-v1-14') || localStorage.getItem('cctv3d-working-v1-13') || localStorage.getItem('cctv3d-working-v1-12') || localStorage.getItem('cctv3d-working-v1-11') || localStorage.getItem('cctv3d-working-v1-10') || localStorage.getItem('cctv3d-working-v1-9') || 'null');
+    const raw = JSON.parse(localStorage.getItem(WORKING_KEY) || localStorage.getItem('cctv3d-working-v1-17') || localStorage.getItem('cctv3d-working-v1-16') || localStorage.getItem('cctv3d-working-v1-15') || localStorage.getItem('cctv3d-working-v1-14') || localStorage.getItem('cctv3d-working-v1-13') || localStorage.getItem('cctv3d-working-v1-12') || localStorage.getItem('cctv3d-working-v1-11') || localStorage.getItem('cctv3d-working-v1-10') || localStorage.getItem('cctv3d-working-v1-9') || 'null');
     if(raw) return { ...base, ...raw, cameras:migrateFlatData(raw.cameras), modules:migrateFlatData(raw.modules), calibrations:raw.calibrations || {} };
     const prev = JSON.parse(localStorage.getItem('cctv3d-working-v1-8') || localStorage.getItem('cctv3d-working-v1-7') || 'null');
     if(prev){
@@ -521,17 +527,86 @@ $('resetCalibrationBtn').onclick=()=>{if(!confirm('重設此樓層的實尺比�
 
 els.listFilter.onchange=()=>{state.listFilter=els.listFilter.value;saveWorking();refreshUI();};$('planToggleBtn').onclick=()=>{state.showPlan=!state.showPlan;if(floorPlane)floorPlane.material.opacity=state.showPlan?1:.12;saveWorking();refreshUI();};$('view3dBtn').onclick=()=>{camera.position.set(0,72,86);controls.target.set(0,0,0);controls.update();};$('topViewBtn').onclick=()=>{camera.position.set(0,130,.01);controls.target.set(0,0,0);controls.update();};$('resetViewBtn').onclick=resetView;function resetView(){camera.position.set(0,72,86);controls.target.set(0,0,0);controls.update();}
 
-// 專案儲存 / 資料夾
+// 專案儲存 / 資料夾 / Google Sheets 雲端資料庫
 function getStore(){try{const raw=localStorage.getItem(STORE_KEY)||PREV_STORE_KEYS.map(k=>localStorage.getItem(k)).find(Boolean);return JSON.parse(raw)||{folders:[{id:'root',name:'我的專案'}],projects:[]};}catch{return{folders:[{id:'root',name:'我的專案'}],projects:[]};}}
-function setStore(s){localStorage.setItem(STORE_KEY,JSON.stringify(s));}function ensureStore(){const s=getStore();if(!s.folders?.length)s.folders=[{id:'root',name:'我的專案'}];if(!s.projects)s.projects=[];setStore(s);return s;}
-function renderStore(){const s=ensureStore(),cur=els.projectFolder.value&&s.folders.some(f=>f.id===els.projectFolder.value)?els.projectFolder.value:s.folders[0].id;els.projectFolder.innerHTML=s.folders.map(f=>`<option value="${esc(f.id)}">${esc(f.name)}</option>`).join('');els.projectFolder.value=cur;const list=s.projects.filter(p=>p.folderId===cur).sort((a,b)=>b.updatedAt-a.updatedAt);els.savedCount.textContent=`${list.length} 筆`;els.projectList.innerHTML=list.length?list.map(p=>`<div class="item"><div><strong>${esc(p.name)}</strong><small>${new Date(p.updatedAt).toLocaleString()}・${esc(p.version||'')}</small></div><div class="project-actions"><button data-act="load" data-id="${esc(p.id)}">讀取</button><button data-act="delete" data-id="${esc(p.id)}">刪除</button></div></div>`).join(''):'<div class="empty-list">此資料夾尚無儲存專案</div>';els.projectList.querySelectorAll('button').forEach(b=>b.onclick=e=>{e.stopPropagation();b.dataset.act==='load'?loadProject(b.dataset.id):deleteProject(b.dataset.id);});}
-els.projectFolder.onchange=renderStore;$('newFolderBtn').onclick=()=>{const name=prompt('輸入新資料夾名稱：');if(!name?.trim())return;const s=ensureStore(),f={id:uid('folder'),name:name.trim()};s.folders.push(f);setStore(s);renderStore();els.projectFolder.value=f.id;renderStore();};$('deleteFolderBtn').onclick=()=>{const s=ensureStore(),id=els.projectFolder.value;if(id==='root'){alert('「我的專案」為預設資料夾，不能刪除。');return;}const f=s.folders.find(x=>x.id===id);if(!f)return;const count=s.projects.filter(p=>p.folderId===id).length;if(!confirm(`刪除資料夾「${f.name}」？${count?`\n裡面的 ${count} 個專案也會一起刪除。`:''}`))return;s.folders=s.folders.filter(x=>x.id!==id);s.projects=s.projects.filter(p=>p.folderId!==id);setStore(s);renderStore();};
+function setStore(s){localStorage.setItem(STORE_KEY,JSON.stringify(s));}
+function ensureStore(){const s=getStore();if(!s.folders?.length)s.folders=[{id:'root',name:'我的專案'}];if(!s.projects)s.projects=[];setStore(s);return s;}
+function selectedFolderName(){const s=ensureStore();return s.folders.find(f=>f.id===els.projectFolder.value)?.name||'我的專案';}
+function renderFolderOptions(){const s=ensureStore(),cur=els.projectFolder.value&&s.folders.some(f=>f.id===els.projectFolder.value)?els.projectFolder.value:s.folders[0].id;els.projectFolder.innerHTML=s.folders.map(f=>`<option value="${esc(f.id)}">${esc(f.name)}</option>`).join('');els.projectFolder.value=cur;}
+
+let cloudProjects=[];
+let activeApiUrl='';
+let cloudConnected=false;
+function setCloudStatus(ok,text){cloudConnected=!!ok;els.cloudStatusBadge.textContent=ok?'雲端已連線':'雲端未連線';els.apiStatusText.textContent=text||'';}
+function parseCsvSingleCell(text){let s=String(text||'').trim();if(s.startsWith('"')&&s.endsWith('"'))s=s.slice(1,-1).replace(/""/g,'"');return s.trim();}
+async function getApiUrlFromSheet(force=false){
+  if(!force&&activeApiUrl)return activeApiUrl;
+  try{
+    const res=await fetch(API_CONFIG_CSV_URL,{cache:'no-store'});
+    if(!res.ok)throw new Error(`B1 讀取失敗 HTTP ${res.status}`);
+    const url=parseCsvSingleCell(await res.text());
+    if(!/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec(?:\?.*)?$/i.test(url))throw new Error('工作表1!B1 不是有效的 Apps Script /exec 網址');
+    activeApiUrl=url;localStorage.setItem(API_CACHE_KEY,url);return url;
+  }catch(err){
+    const cached=localStorage.getItem(API_CACHE_KEY)||'';
+    if(cached){activeApiUrl=cached;els.apiStatusText.textContent=`工作表1!B1 暫時無法讀取，使用上次成功端點｜${err.message}`;return cached;}
+    throw err;
+  }
+}
+async function apiGet(action,params={}){const base=await getApiUrlFromSheet();const u=new URL(base);u.searchParams.set('action',action);Object.entries(params).forEach(([k,v])=>u.searchParams.set(k,v));const r=await fetch(u.toString(),{cache:'no-store'});if(!r.ok)throw new Error(`API HTTP ${r.status}`);return await r.json();}
+async function apiPost(body){const base=await getApiUrlFromSheet();const r=await fetch(base,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body)});if(!r.ok)throw new Error(`API HTTP ${r.status}`);return await r.json();}
+function renderCloudProjects(){
+  const folder=selectedFolderName();
+  const list=cloudProjects.filter(p=>!p.folder||p.folder===folder).sort((a,b)=>new Date(b.updatedAt)-new Date(a.updatedAt));
+  els.savedCount.textContent=`${list.length} 筆`;
+  els.projectList.innerHTML=list.length?list.map(p=>`<div class="item"><div><strong>${esc(p.projectName)}</strong><small>${esc(p.community||'')}・${esc(p.floor||'')}・${esc(p.folder||'我的專案')}・${esc(p.version||'')}</small></div><div class="project-actions"><button data-act="load" data-id="${esc(p.projectId)}">讀取</button><button data-act="delete" data-id="${esc(p.projectId)}">刪除</button></div></div>`).join(''):'<div class="empty-list">此資料夾尚無雲端專案</div>';
+  els.projectList.querySelectorAll('button').forEach(b=>b.onclick=e=>{e.stopPropagation();b.dataset.act==='load'?loadProjectCloud(b.dataset.id):deleteProjectCloud(b.dataset.id);});
+}
+async function refreshCloudProjects(forceApi=false){
+  try{
+    if(forceApi){activeApiUrl='';localStorage.removeItem(API_CACHE_KEY);}
+    setCloudStatus(false,'API 來源：工作表1!B1｜連線中…');
+    const ping=await apiGet('ping');if(!ping?.ok)throw new Error(ping?.message||'API ping 失敗');
+    const data=await apiGet('listProjects');if(!data?.ok)throw new Error(data?.message||'讀取專案清單失敗');
+    cloudProjects=Array.isArray(data.projects)?data.projects:[];
+    setCloudStatus(true,`API 來源：工作表1!B1｜連線正常｜${cloudProjects.length} 個雲端專案`);
+    renderCloudProjects();
+  }catch(err){
+    console.warn(err);setCloudStatus(false,`API 來源：工作表1!B1｜${err.message}`);els.projectList.innerHTML='<div class="empty-list">雲端連線失敗，請確認工作表1!B1、分享權限與 Apps Script 部署權限。</div>';els.savedCount.textContent='0 筆';
+  }
+}
+function renderStore(){renderFolderOptions();renderCloudProjects();}
+els.projectFolder.onchange=renderCloudProjects;
+$('newFolderBtn').onclick=()=>{const name=prompt('輸入新資料夾名稱：');if(!name?.trim())return;const s=ensureStore(),f={id:uid('folder'),name:name.trim()};s.folders.push(f);setStore(s);renderFolderOptions();els.projectFolder.value=f.id;renderCloudProjects();};
+$('deleteFolderBtn').onclick=()=>{const s=ensureStore(),id=els.projectFolder.value;if(id==='root'){alert('「我的專案」為預設資料夾，不能刪除。');return;}const f=s.folders.find(x=>x.id===id);if(!f)return;if(!confirm(`刪除本機分類資料夾「${f.name}」？雲端專案資料不會被自動刪除。`))return;s.folders=s.folders.filter(x=>x.id!==id);setStore(s);renderFolderOptions();renderCloudProjects();};
 function buildProjectPayload(){return{communityId:state.communityId,floor:state.floor,showPlan:state.showPlan,listFilter:state.listFilter,cameras:deepCopy(state.cameras),modules:deepCopy(state.modules),calibrations:deepCopy(state.calibrations),catalog:deepCopy(catalog)};}
-$('saveProjectBtn').onclick=()=>{const name=els.projectName.value.trim();if(!name){alert('請先輸入專案名稱。');return;}const s=ensureStore(),folderId=els.projectFolder.value,payload=buildProjectPayload();let p=s.projects.find(x=>x.folderId===folderId&&x.name===name);if(p){p.data=payload;p.updatedAt=Date.now();p.version=APP_VERSION;}else{s.projects.push({id:uid('project'),folderId,name,data:payload,updatedAt:Date.now(),version:APP_VERSION});}setStore(s);renderStore();els.statusText.textContent=`已儲存：${name}｜${APP_VERSION}`;};
+$('saveProjectBtn').onclick=async()=>{
+  const name=els.projectName.value.trim();if(!name){alert('請先輸入專案名稱。');return;}
+  const community=currentCommunity()?.name||'',floor=currentFloorMeta()?.name||state.floor,folder=selectedFolderName(),payload=buildProjectPayload();
+  const existing=cloudProjects.find(p=>p.projectName===name&&p.community===community&&p.floor===floor&&(p.folder||'我的專案')===folder);
+  try{
+    els.statusText.textContent=`正在儲存到 Google Sheets：${name}…`;
+    const result=await apiPost({action:'saveProject',projectId:existing?.projectId||'',community,floor,folder,projectName:name,version:APP_VERSION,data:payload});
+    if(!result?.ok)throw new Error(result?.message||'雲端儲存失敗');
+    // 同步保留瀏覽器本機備份
+    const s=ensureStore(),folderId=els.projectFolder.value;let lp=s.projects.find(x=>x.folderId===folderId&&x.name===name);if(lp){lp.data=payload;lp.updatedAt=Date.now();lp.version=APP_VERSION;}else{s.projects.push({id:result.projectId||uid('project'),folderId,name,data:payload,updatedAt:Date.now(),version:APP_VERSION});}setStore(s);
+    els.statusText.textContent=`雲端儲存完成：${name}｜${APP_VERSION}`;await refreshCloudProjects();
+  }catch(err){console.warn(err);alert(`雲端儲存失敗：${err.message}`);els.statusText.textContent='雲端儲存失敗';}
+};
 function applyPayload(p){if(p.catalog?.communities?.length){catalog=p.catalog;saveCatalog();}state.communityId=p.communityId||catalog.communities[0].id;state.floor=p.floor||currentCommunity()?.floors[0]?.id||'';state.showPlan=p.showPlan!==false;state.listFilter=p.listFilter||'camera';state.cameras=migrateFlatData(p.cameras);state.modules=migrateFlatData(p.modules);state.calibrations=p.calibrations||{};state.selected={kind:'camera',id:null};saveWorking();buildFloor();renderObjects();refreshUI();resetView();}
-function loadProject(id){const s=ensureStore(),p=s.projects.find(x=>x.id===id);if(!p)return;if(!confirm(`讀取「${p.name}」？目前未儲存的變更會被取代。`))return;els.projectName.value=p.name;applyPayload(p.data);els.statusText.textContent=`已讀取：${p.name}｜${p.version||APP_VERSION}`;}
-function deleteProject(id){const s=ensureStore(),p=s.projects.find(x=>x.id===id);if(!p)return;if(!confirm(`確定刪除專案「${p.name}」？`))return;s.projects=s.projects.filter(x=>x.id!==id);setStore(s);renderStore();}
+async function loadProjectCloud(id){
+  const meta=cloudProjects.find(x=>x.projectId===id);if(!meta)return;if(!confirm(`讀取「${meta.projectName}」？目前未儲存的變更會被取代。`))return;
+  try{const r=await apiGet('getProject',{projectId:id});if(!r?.ok||!r.project)throw new Error(r?.message||'讀取失敗');els.projectName.value=r.project.projectName||'';applyPayload(r.project.data||{});els.statusText.textContent=`已從雲端讀取：${r.project.projectName}｜${r.project.version||APP_VERSION}`;}catch(err){alert(`雲端讀取失敗：${err.message}`);}
+}
+async function deleteProjectCloud(id){const meta=cloudProjects.find(x=>x.projectId===id);if(!meta)return;if(!confirm(`確定從 Google Sheets 刪除專案「${meta.projectName}」？`))return;try{const r=await apiPost({action:'deleteProject',projectId:id});if(!r?.ok)throw new Error(r?.message||'刪除失敗');els.statusText.textContent=`雲端專案已刪除：${meta.projectName}`;await refreshCloudProjects();}catch(err){alert(`雲端刪除失敗：${err.message}`);}}
 $('exportProjectBtn').onclick=async()=>{const name=els.projectName.value.trim()||`CCTV專案-${new Date().toISOString().slice(0,10)}`,payload={format:'UTOP-CCTV-3D-PROJECT',schemaVersion:4,appVersion:APP_VERSION,company:'昱拓弱電有限公司',name,exportedAt:new Date().toISOString(),data:buildProjectPayload()},blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),filename=`${name}.utop3d`;if(window.showSaveFilePicker){try{const h=await window.showSaveFilePicker({suggestedName:filename,types:[{description:'UTOP 3D Project',accept:{'application/json':['.utop3d','.json']}}]}),w=await h.createWritable();await w.write(blob);await w.close();els.statusText.textContent=`已匯出：${filename}`;return;}catch(e){if(e?.name!=='AbortError')console.warn(e);}}const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;a.click();URL.revokeObjectURL(a.href);};$('importProjectBtn').onclick=()=>$('importProjectFile').click();$('importProjectFile').onchange=async e=>{const file=e.target.files?.[0];if(!file)return;try{const j=JSON.parse(await file.text());applyPayload(j.data||j);els.projectName.value=j.name||file.name.replace(/\.(utop3d|json)$/i,'');els.statusText.textContent=`已匯入：${file.name}`;}catch(err){console.warn(err);alert('匯入失敗，檔案格式不正確。');}e.target.value='';};
+
+$('openDriveFolderBtn').onclick=()=>{window.open(GOOGLE_DRIVE_PROJECT_URL,'_blank','noopener,noreferrer');els.statusText.textContent=`已開啟 Google Drive 專案資料夾｜${APP_VERSION}`;};
+$('copyDriveFolderBtn').onclick=async()=>{try{await navigator.clipboard.writeText(GOOGLE_DRIVE_PROJECT_URL);els.statusText.textContent='Google Drive 路徑已複製';}catch{prompt('請複製 Google Drive 路徑：',GOOGLE_DRIVE_PROJECT_URL);}};
+
+$('openProjectSheetBtn').onclick=()=>{window.open(GOOGLE_SHEET_PROJECT_URL,'_blank','noopener,noreferrer');els.statusText.textContent=`已開啟專案 EXCEL｜${APP_VERSION}`;};
+$('refreshCloudBtn').onclick=()=>refreshCloudProjects(false);
+$('reloadApiBtn').onclick=()=>refreshCloudProjects(true);
 
 function resize(){const w=els.viewer.clientWidth,h=els.viewer.clientHeight;camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h,false);}window.addEventListener('resize',resize);
 function animate(){
@@ -548,4 +623,4 @@ function animate(){
   controls.update();
   renderer.render(scene,camera);
 }
-buildFloor();renderObjects();refreshUI();renderStore();resize();animate();
+buildFloor();renderObjects();refreshUI();renderStore();resize();animate();refreshCloudProjects();

@@ -13,12 +13,12 @@
       <div>
         <div class="brand-row">
           <h1>昱拓弱電有限公司｜社區地下室 CCTV 3D 規劃</h1>
-          <span class="version-badge" id="versionBadge">V1.15</span>
+          <span class="version-badge" id="versionBadge">V1.18</span>
         </div>
-        <p>社區資料夾・連續牆體・可視光影・白色汽車模組・無敵星提示</p>
+        <p>社區資料夾・Google Sheets 雲端資料庫・可視光影・白色汽車模組・無敵星提示</p>
       </div>
     </div>
-    <div class="status"><span class="dot"></span><span id="statusText">B1 模型已載入｜版本 V1.15</span></div>
+    <div class="status"><span class="dot"></span><span id="statusText">B1 模型已載入｜版本 V1.18</span></div>
   </header>
 
   <nav class="floor-tabs" aria-label="地下室樓層">
@@ -57,7 +57,7 @@
         <span>滾輪縮放</span>
         <span>牆體：連續點位；點回起點自動完成，Enter 可結束開放牆，Esc 取消</span>
         <span>視角：顯示實際可見光影範圍，牆柱與車機車遮擋不穿透</span><span>圖紙比例：X/Z 同比例映射＋兩點實尺校正</span>
-        <span>版本：<b id="footerVersionInline">V1.15</b></span>
+        <span>版本：<b id="footerVersionInline">V1.18</b></span>
       </div>
     </section>
 
@@ -70,7 +70,7 @@
           </div>
           <span class="badge">互動模型</span>
         </div>
-        <p class="muted">目前 B1、B2 圖面歸類在「樺龍潮+ 社區」。本版延續黃色增設鏡頭與 7 公尺高閃爍無敵星提示，並把汽車模組主色由紅色調整為白色，讓圖面辨識更乾淨、不會過度搶眼。汽車與機車仍可設定是否遮擋鏡頭視角。</p>
+        <p class="muted">目前 B1、B2 圖面歸類在「樺龍潮+ 社區」。本版正式接上 Google Sheets 雲端資料庫：前端從「工作表1!B1」讀取目前有效 Apps Script /exec 端點，儲存、讀取與刪除專案都可直接同步到 EXCEL。</p>
       </section>
 
       <section class="panel-section stats-grid">
@@ -123,7 +123,7 @@
       <section class="panel-section" id="projectStorage">
         <div class="section-heading row-between">
           <span>專案儲存</span>
-          <span class="mini-badge">資料夾管理</span>
+          <span id="cloudStatusBadge" class="mini-badge">雲端連線中</span>
         </div>
         <div class="two-col">
           <label>儲存位置<select id="projectFolder"></select></label>
@@ -132,19 +132,40 @@
         <div class="drawer-actions">
           <button id="newFolderBtn" class="mini-btn accent2">＋ 新增資料夾</button>
           <button id="deleteFolderBtn" class="mini-btn">刪除資料夾</button>
-          <button id="saveProjectBtn" class="mini-btn accent">儲存專案</button>
+          <button id="saveProjectBtn" class="mini-btn accent">儲存到雲端</button>
         </div>
         <div class="drawer-actions file-actions">
           <button id="exportProjectBtn" class="mini-btn accent">匯出專案檔</button>
           <button id="importProjectBtn" class="mini-btn accent2">匯入專案檔</button>
           <input id="importProjectFile" type="file" accept=".json,.utop3d" hidden />
         </div>
-        <div class="field-note">可建立資料夾、選擇儲存位置、儲存 / 讀取 / 刪除專案，並支援匯出與匯入。</div>
         <div class="section-heading row-between top-gap">
-          <span>已儲存專案</span>
+          <span>Google Drive 儲存 / 開啟路徑</span>
+          <span class="mini-badge">雲端資料夾</span>
+        </div>
+        <div class="drawer-actions">
+          <button id="openDriveFolderBtn" class="mini-btn accent2">開啟 Google Drive 資料夾</button>
+          <button id="copyDriveFolderBtn" class="mini-btn">複製路徑</button>
+        </div>
+        <div id="driveFolderPath" class="field-note">https://drive.google.com/drive/folders/1FWduBvqlTmr1oTipmqR3sywO2VUCFq9i?usp=drive_link</div>
+        <div class="field-note">此 Google Drive 資料夾已設為專案預設開啟路徑。匯出 .utop3d 後可直接開啟此資料夾上傳；若要做到按一下就直接寫入 Google Drive，需要再加入 Google Drive API / OAuth 授權。</div>
+        <div class="section-heading row-between top-gap">
+          <span>專案 EXCEL / Google Sheets</span>
+          <span class="mini-badge">雲端資料庫</span>
+        </div>
+        <div class="drawer-actions">
+          <button id="openProjectSheetBtn" class="mini-btn accent">開啟專案 EXCEL</button>
+          <button id="refreshCloudBtn" class="mini-btn accent2">重新整理雲端專案</button>
+          <button id="reloadApiBtn" class="mini-btn">重新讀取 B1 API</button>
+        </div>
+        <div id="projectSheetPath" class="field-note">https://docs.google.com/spreadsheets/d/1-jy-MWBXMyx92xZ-RTnwqpB-j7cMnlOIB2i1lh2eUZg/edit?usp=sharing</div>
+        <div id="apiStatusText" class="field-note">API 來源：工作表1!B1｜正在讀取目前有效 /exec 網址…</div>
+        <div class="field-note">前端不固定寫死 Apps Script 網址。每次重新部署 API，只要更新「工作表1!B1」，網站重新整理後就會使用新的 /exec 端點。</div>
+        <div class="section-heading row-between top-gap">
+          <span>雲端已儲存專案</span>
           <span id="savedCount" class="mini-badge">0 筆</span>
         </div>
-        <div id="projectList" class="item-list"><div class="empty-list">尚無儲存專案</div></div>
+        <div id="projectList" class="item-list"><div class="empty-list">正在讀取 Google Sheets 雲端專案…</div></div>
       </section>
 
       <section class="panel-section" id="moduleDrawer">
@@ -225,7 +246,7 @@
     </aside>
   </main>
 
-  <footer class="footer-note">V1.15｜昱拓弱電有限公司｜鏡頭實際可視範圍｜連續牆體自動封閉｜藍色鏡頭 4m 提示氣球｜社區 / 樓層管理</footer>
+  <footer class="footer-note">V1.18｜昱拓弱電有限公司｜Google Sheets 雲端儲存 / 開啟 / 刪除｜API 來源：工作表1!B1｜鏡頭光影視域｜白色汽車｜黃色增設鏡頭 7m 閃爍星星</footer>
 
   <script type="importmap">
   {
