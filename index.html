@@ -9,16 +9,16 @@
 <body>
   <header class="topbar">
     <div class="brand">
-      <div class="brand-mark">3D</div>
+      <div class="brand-mark">UTOP</div>
       <div>
         <div class="brand-row">
           <h1>昱拓弱電有限公司｜社區地下室 CCTV 3D 規劃</h1>
-          <span class="version-badge" id="versionBadge">V1.6</span>
+          <span class="version-badge" id="versionBadge">V1.7</span>
         </div>
-        <p>監視器位置・模組抽屜・死角說明</p>
+        <p>鏡頭配置・模組抽屜・專案儲存・牆體折線建立</p>
       </div>
     </div>
-    <div class="status"><span class="dot"></span><span id="statusText">B1 模型已載入｜版本 V1.6</span></div>
+    <div class="status"><span class="dot"></span><span id="statusText">B1 模型已載入｜版本 V1.7</span></div>
   </header>
 
   <nav class="floor-tabs" aria-label="地下室樓層">
@@ -37,20 +37,25 @@
         </div>
         <div class="tool-group camera-tools">
           <button id="addCameraBtn" class="tool primary">＋ 新增鏡頭</button>
-          <button id="addWallBtn" class="tool accent">＋ 新增牆體</button>
+          <button id="addWallBtn" class="tool accent">＋ 折線牆體</button>
           <button id="addColumnBtn" class="tool accent2">＋ 新增柱子</button>
           <button id="clearModuleBtn" class="tool warn ghost">清除本層模組</button>
         </div>
       </div>
 
       <div id="viewer" class="viewer" aria-label="3D 地下室檢視區">
-        <div id="addHint" class="add-hint hidden">請在圖面上點一下放置模組或監視器</div>
+        <div id="addHint" class="add-hint hidden">請在圖面上操作</div>
         <div class="compass"><span>N</span><b>↑</b></div>
         <div class="floor-chip" id="floorChip">B1</div>
       </div>
 
       <div class="viewer-help">
-        <span>左鍵旋轉</span><span>右鍵平移</span><span>滾輪縮放</span><span>鏡頭可點選移動</span><span>版本：<b id="footerVersionInline">V1.6</b></span>
+        <span>左鍵旋轉 / 選取 / 拖曳移動</span>
+        <span>右鍵平移</span>
+        <span>滾輪縮放</span>
+        <span>牆體折線：多點點擊，按 Enter 完成，Esc 取消</span>
+        <span>圖紙比例：X/Z 同比例映射</span>
+        <span>版本：<b id="footerVersionInline">V1.7</b></span>
       </div>
     </section>
 
@@ -63,14 +68,14 @@
           </div>
           <span class="badge">互動模型</span>
         </div>
-        <p class="muted">本版新增專案檔匯出 / 匯入，可實際選擇電腦儲存位置；同時保留鏡頭焦距、資料夾、儲存、讀取與刪除。</p>
+        <p class="muted">本版支援鏡頭、柱子與牆體模組直接拖曳移動；勾選固定後不會再跟著滑鼠移動。圖紙保持原始長寬比例，角度計算採等比例座標映射。</p>
       </section>
 
       <section class="panel-section stats-grid">
         <div class="stat"><b id="cameraCount">0</b><span>本層鏡頭</span></div>
         <div class="stat"><b id="moduleCount">0</b><span>本層模組</span></div>
         <div class="stat"><b id="selectedFov">—</b><span>選取 FOV</span></div>
-        <div class="stat"><b id="selectedModuleType">—</b><span>選取模組</span></div>
+        <div class="stat"><b id="selectedType">—</b><span>選取項目</span></div>
       </section>
 
       <section class="panel-section" id="projectStorage">
@@ -79,12 +84,8 @@
           <span class="mini-badge">資料夾管理</span>
         </div>
         <div class="two-col">
-          <label>儲存位置
-            <select id="projectFolder"></select>
-          </label>
-          <label>專案名稱
-            <input id="projectName" type="text" placeholder="例：A社區 CCTV 改善案" />
-          </label>
+          <label>儲存位置<select id="projectFolder"></select></label>
+          <label>專案名稱<input id="projectName" type="text" placeholder="例：A社區 CCTV 改善案" /></label>
         </div>
         <div class="drawer-actions">
           <button id="newFolderBtn" class="mini-btn accent2">＋ 新增資料夾</button>
@@ -96,21 +97,21 @@
           <button id="importProjectBtn" class="mini-btn accent2">匯入專案檔</button>
           <input id="importProjectFile" type="file" accept=".json,.utop3d" hidden />
         </div>
-        <p class="field-note">「匯出專案檔」會讓你選擇電腦實際儲存位置；若瀏覽器不支援指定位置，則改為一般下載。匯入後可再存進網頁內資料夾。</p>
-        <div class="section-heading row-between">
+        <div class="field-note">可建立資料夾、選擇儲存位置、儲存 / 讀取 / 刪除專案，並支援匯出與匯入。</div>
+        <div class="section-heading row-between top-gap">
           <span>已儲存專案</span>
           <span id="savedCount" class="mini-badge">0 筆</span>
         </div>
-        <div id="projectList" class="camera-list"><div class="empty-list">尚無儲存專案</div></div>
+        <div id="projectList" class="item-list"><div class="empty-list">尚無儲存專案</div></div>
       </section>
 
       <section class="panel-section" id="moduleDrawer">
         <div class="section-heading row-between"><span>模組抽屜</span><span class="mini-badge">牆體／柱子</span></div>
         <div class="drawer-actions">
-          <button id="drawerAddWallBtn" class="mini-btn accent">新增牆體</button>
+          <button id="drawerAddWallBtn" class="mini-btn accent">折線牆體</button>
           <button id="drawerAddColumnBtn" class="mini-btn accent2">新增柱子</button>
         </div>
-        <div id="noModule" class="empty-state">尚未選取模組。<br>按「新增牆體 / 新增柱子」後，到圖面點一下定位。</div>
+        <div id="noModule" class="empty-state">尚未選取模組。<br>可直接拖曳移動；若勾選固定，則不會再被拖曳。</div>
         <div id="moduleForm" class="module-form hidden">
           <label>模組名稱<input id="modName" type="text" /></label>
           <label>模組類型<input id="modType" type="text" disabled /></label>
@@ -123,18 +124,14 @@
             <label id="modThicknessWrap">厚度<input id="modThickness" type="number" min="0.05" step="0.05" /></label>
           </div>
           <label>角度<input id="modAngle" type="range" min="0" max="359" value="0" /><output id="modAngleOut">0°</output></label>
+          <label class="checkbox-row"><input id="modFixed" type="checkbox" /> 固定位置（勾選後不可拖曳移動）</label>
           <div class="form-actions"><button id="deleteModuleBtn" class="danger-button">刪除此模組</button></div>
         </div>
       </section>
 
-      <section class="panel-section grow">
-        <div class="section-heading">模組清單</div>
-        <div id="moduleList" class="camera-list"><div class="empty-list">尚無模組</div></div>
-      </section>
-
       <section class="panel-section" id="cameraEditor">
-        <div class="section-heading row-between"><span>鏡頭設定</span><span class="mini-badge">焦距 / 7 色分類</span></div>
-        <div id="noCamera" class="empty-state">尚未選取鏡頭。<br>按「＋ 新增鏡頭」後直接在圖面定位。</div>
+        <div class="section-heading row-between"><span>鏡頭設定</span><span class="mini-badge">焦距 / 顏色</span></div>
+        <div id="noCamera" class="empty-state">尚未選取鏡頭。<br>鏡頭可直接拖曳移動；固定後不可移動。</div>
         <div id="cameraForm" class="camera-form hidden">
           <label>鏡頭名稱<input id="camName" type="text" /></label>
           <div class="two-col">
@@ -149,32 +146,39 @@
             </label>
             <label>建議水平視角<input id="camLensFov" type="text" disabled /></label>
           </div>
-          <p class="field-note">焦距越小，視角越廣；焦距越大，視角越窄。此處為常見監視器感光元件的近似值，實際角度仍會依廠牌與感光元件尺寸略有不同。</p>
+          <div class="field-note">焦距越小，視角越廣；焦距越大，視角越窄。這裡採常見監視器近似值。</div>
           <div class="two-col">
             <label>顏色分類<select id="camColor"></select></label>
             <label>分類名稱<input id="camColorLabel" type="text" placeholder="例：原建置 / 增設 / 故障" /></label>
           </div>
-          <label class="checkbox-row"><input id="camFixed" type="checkbox" /> 固定位置（勾選後不可移動）</label>
-          <div class="form-actions inline-start"><button id="moveCamBtn" class="tool accent">移動鏡頭位置</button></div>
+          <label class="checkbox-row"><input id="camFixed" type="checkbox" /> 固定位置（勾選後不可拖曳移動）</label>
           <div class="two-col">
             <label>水平視角 FOV<input id="camFov" type="range" min="30" max="120" value="76" /><output id="camFovOut">76°</output></label>
             <label>監看距離<input id="camRange" type="range" min="6" max="50" value="18" /><output id="camRangeOut">18m</output></label>
           </div>
           <label>方向<input id="camYaw" type="range" min="0" max="359" value="0" /><output id="camYawOut">0°</output></label>
           <label>安裝備註<textarea id="camNote" rows="3" placeholder="例：柱後方死角、車道轉角、電梯口"></textarea></label>
-          <div class="form-actions split"><button id="deleteCamBtn" class="danger-button">刪除此鏡頭</button></div>
+          <div class="form-actions"><button id="deleteCamBtn" class="danger-button">刪除此鏡頭</button></div>
         </div>
       </section>
 
       <section class="panel-section grow small-gap">
-        <div class="section-heading">鏡頭清單</div>
-        <div class="color-legend" id="cameraLegend"></div>
-        <div id="cameraList" class="camera-list"><div class="empty-list">尚無鏡頭</div></div>
+        <div class="section-heading row-between">
+          <span>項目清單</span>
+          <select id="listFilter" class="inline-select">
+            <option value="camera" selected>鏡頭</option>
+            <option value="wall">牆體</option>
+            <option value="column">柱子</option>
+            <option value="all">全部</option>
+          </select>
+        </div>
+        <div id="cameraLegend" class="color-legend"></div>
+        <div id="itemList" class="item-list"><div class="empty-list">尚無項目</div></div>
       </section>
     </aside>
   </main>
 
-  <footer class="footer-note">V1.6｜昱拓弱電有限公司｜鏡頭焦距連動 FOV｜專案資料夾儲存 / 讀取 / 刪除｜每次更新同步顯示版本號</footer>
+  <footer class="footer-note">V1.7｜昱拓弱電有限公司｜鏡頭 / 模組可拖曳移動與固定位置｜項目清單分類篩選｜牆體折線建立｜圖紙比例等比映射</footer>
 
   <script type="importmap">
   {

@@ -1,7 +1,16 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-const APP_VERSION = 'V1.6';
+const APP_VERSION = 'V1.7';
+const PLAN_W = 2530;
+const PLAN_H = 1980;
+const PX_TO_UNIT = 0.04; // X/Z 同比例映射，保留原圖長寬比
+const FLOOR_W = PLAN_W * PX_TO_UNIT;
+const FLOOR_D = PLAN_H * PX_TO_UNIT;
+const WORKING_KEY = 'cctv3d-working-v1-7';
+const STORE_KEY = 'cctv3d-project-store-v1-7';
+const PREV_STORE_KEYS = ['cctv3d-project-store-v1-6', 'cctv3d-project-store-v1-5'];
+
 const CAMERA_COLOR_PRESETS = {
   red:    { label: '原建置', body: 0xdc2626, cone: 0xef4444, line: 0xf87171 },
   blue:   { label: '增設',   body: 0x2563eb, cone: 0x3b82f6, line: 0x60a5fa },
@@ -11,8 +20,6 @@ const CAMERA_COLOR_PRESETS = {
   purple: { label: '紫',     body: 0x7c3aed, cone: 0x8b5cf6, line: 0xa78bfa },
   gray:   { label: '灰',     body: 0x4b5563, cone: 0x6b7280, line: 0x9ca3af }
 };
-
-// 常見 1/2.8"~1/3" 監視器的近似水平視角，實際依廠牌/感光元件而異。
 const LENS_PRESETS = {
   '2.8': { fov: 102, range: 14 },
   '3.6': { fov: 84,  range: 17 },
@@ -22,302 +29,424 @@ const LENS_PRESETS = {
 };
 
 const $ = id => document.getElementById(id);
-const viewer = $('viewer');
+const els = {
+  viewer: $('viewer'), floorTitle: $('floorTitle'), floorChip: $('floorChip'), statusText: $('statusText'),
+  cameraCount: $('cameraCount'), moduleCount: $('moduleCount'), selectedFov: $('selectedFov'), selectedType: $('selectedType'),
+  versionBadge: $('versionBadge'), footerVersionInline: $('footerVersionInline'), addHint: $('addHint'),
+  noCamera: $('noCamera'), cameraForm: $('cameraForm'), noModule: $('noModule'), moduleForm: $('moduleForm'),
+  itemList: $('itemList'), listFilter: $('listFilter'), cameraLegend: $('cameraLegend'),
+  projectFolder: $('projectFolder'), projectName: $('projectName'), projectList: $('projectList'), savedCount: $('savedCount')
+};
 const floorTabs = [...document.querySelectorAll('.floor-tab')];
-const floorTitle = $('floorTitle');
-const floorChip = $('floorChip');
-const cameraCount = $('cameraCount');
-const moduleCount = $('moduleCount');
-const cameraList = $('cameraList');
-const moduleList = $('moduleList');
-const cameraLegend = $('cameraLegend');
-const noCamera = $('noCamera');
-const noModule = $('noModule');
-const cameraForm = $('cameraForm');
-const moduleForm = $('moduleForm');
-const addHint = $('addHint');
-const selectedFov = $('selectedFov');
-const selectedModuleType = $('selectedModuleType');
-const statusText = $('statusText');
-const projectFolder = $('projectFolder');
-const projectName = $('projectName');
-const projectList = $('projectList');
-const savedCount = $('savedCount');
-const exportProjectBtn = $('exportProjectBtn');
-const importProjectBtn = $('importProjectBtn');
-const importProjectFile = $('importProjectFile');
-
-$('versionBadge').textContent = APP_VERSION;
-$('footerVersionInline').textContent = APP_VERSION;
 
 const camInputs = {
-  name: $('camName'), lens: $('camLens'), lensFov: $('camLensFov'), color: $('camColor'), colorLabel: $('camColorLabel'),
-  fixed: $('camFixed'), moveBtn: $('moveCamBtn'), fov: $('camFov'), fovOut: $('camFovOut'), range: $('camRange'), rangeOut: $('camRangeOut'),
-  yaw: $('camYaw'), yawOut: $('camYawOut'), note: $('camNote')
+  name: $('camName'), lens: $('camLens'), lensFov: $('camLensFov'), color: $('camColor'), colorLabel: $('camColorLabel'), fixed: $('camFixed'),
+  fov: $('camFov'), fovOut: $('camFovOut'), range: $('camRange'), rangeOut: $('camRangeOut'), yaw: $('camYaw'), yawOut: $('camYawOut'), note: $('camNote')
 };
 const modInputs = {
-  name: $('modName'), type: $('modType'), length: $('modLength'), width: $('modWidth'), height: $('modHeight'), thickness: $('modThickness'),
-  angle: $('modAngle'), angleOut: $('modAngleOut'), widthWrap: $('modWidthWrap'), thicknessWrap: $('modThicknessWrap')
+  name: $('modName'), type: $('modType'), length: $('modLength'), width: $('modWidth'), height: $('modHeight'), thickness: $('modThickness'), angle: $('modAngle'), angleOut: $('modAngleOut'), fixed: $('modFixed'),
+  widthWrap: $('modWidthWrap'), thicknessWrap: $('modThicknessWrap')
 };
 
+els.versionBadge.textContent = APP_VERSION;
+els.footerVersionInline.textContent = APP_VERSION;
 Object.entries(CAMERA_COLOR_PRESETS).forEach(([key, info]) => {
-  const option = document.createElement('option');
-  option.value = key;
-  option.textContent = `${info.label}（${key}）`;
-  camInputs.color.appendChild(option);
+  const opt = document.createElement('option');
+  opt.value = key;
+  opt.textContent = `${info.label}（${key}）`;
+  camInputs.color.appendChild(opt);
 });
-cameraLegend.innerHTML = Object.entries(CAMERA_COLOR_PRESETS).map(([key, info]) => `
-  <span class="legend-chip"><span class="legend-dot" style="background:#${info.body.toString(16).padStart(6,'0')}"></span>${info.label}</span>
-`).join('');
+els.cameraLegend.innerHTML = Object.entries(CAMERA_COLOR_PRESETS).map(([key, info]) => `<span class="legend-chip"><span class="legend-dot" style="background:#${info.body.toString(16).padStart(6,'0')}"></span>${info.label}</span>`).join('');
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0b1118);
-scene.fog = new THREE.Fog(0x0b1118, 120, 210);
+scene.fog = new THREE.Fog(0x0b1118, 120, 220);
 const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 500);
-camera.position.set(0,72,86);
-const renderer = new THREE.WebGLRenderer({antialias:true});
-renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+camera.position.set(0, 72, 86);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
-viewer.prepend(renderer.domElement);
+els.viewer.prepend(renderer.domElement);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
-controls.dampingFactor = .07;
-controls.target.set(0,0,0);
-controls.maxPolarAngle = Math.PI/2.03;
+controls.dampingFactor = 0.07;
+controls.maxPolarAngle = Math.PI / 2.03;
 controls.minDistance = 28;
-controls.maxDistance = 180;
-scene.add(new THREE.HemisphereLight(0xccecff,0x1a2734,1.9));
-const keyLight = new THREE.DirectionalLight(0xffffff,1.45); keyLight.position.set(20,50,30); scene.add(keyLight);
-const floorRoot = new THREE.Group(), moduleRoot = new THREE.Group(), cameraRoot = new THREE.Group();
-scene.add(floorRoot,moduleRoot,cameraRoot);
-const grid = new THREE.GridHelper(120,24,0x25465d,0x172837); grid.position.y=-.05; scene.add(grid);
+controls.maxDistance = 200;
+scene.add(new THREE.HemisphereLight(0xccecff, 0x1a2734, 1.85));
+const dir = new THREE.DirectionalLight(0xffffff, 1.4); dir.position.set(20, 60, 30); scene.add(dir);
+const grid = new THREE.GridHelper(140, 28, 0x25465d, 0x172837); grid.position.y = -0.05; scene.add(grid);
 
+const floorRoot = new THREE.Group();
+const moduleRoot = new THREE.Group();
+const cameraRoot = new THREE.Group();
+const draftRoot = new THREE.Group();
+scene.add(floorRoot, moduleRoot, cameraRoot, draftRoot);
 const textureLoader = new THREE.TextureLoader();
-const floorData = {
-  B1:{title:'B1 地下一層',texture:'assets/b1-plan.png'},
-  B2:{title:'B2 地下二層',texture:'assets/b2-plan.png'}
-};
-const floorWidth = 100, floorDepth = 78.26;
 let floorPlane = null;
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+const floorData = { B1: { title: 'B1 地下一層', texture: 'assets/b1-plan.png' }, B2: { title: 'B2 地下二層', texture: 'assets/b2-plan.png' } };
 
-const state = {
-  floor:'B1', addingMode:null, showPlan:true, selectedCameraId:null, selectedModuleId:null,
-  cameras: sanitizeCameras(JSON.parse(localStorage.getItem('cctv3d-cameras-v1-5') || localStorage.getItem('cctv3d-cameras-v1-4') || localStorage.getItem('cctv3d-cameras-v1') || '{"B1":[],"B2":[]}')),
-  modules: sanitizeModules(JSON.parse(localStorage.getItem('cctv3d-modules-v1-3') || '{"B1":[],"B2":[]}'))
-};
+const state = loadWorkingState();
+let dragState = null; // {kind:'camera'|'module', id}
+let draftWall = { points: [], mousePoint: null };
 
+function loadWorkingState(){
+  const empty = { floor: 'B1', showPlan: true, listFilter: 'camera', cameras: { B1: [], B2: [] }, modules: { B1: [], B2: [] }, selected: { kind: 'camera', id: null } };
+  try{
+    const raw = JSON.parse(localStorage.getItem(WORKING_KEY) || '{}');
+    const prevRaw = JSON.parse(localStorage.getItem('cctv3d-working-v1-6') || '{}');
+    const merged = Object.keys(raw).length ? raw : prevRaw;
+    empty.floor = merged.floor || 'B1';
+    empty.showPlan = merged.showPlan !== false;
+    empty.listFilter = merged.listFilter || 'camera';
+    empty.cameras = sanitizeCameras(merged.cameras);
+    empty.modules = sanitizeModules(merged.modules);
+    empty.selected = merged.selected || empty.selected;
+  }catch{}
+  return empty;
+}
 function sanitizeCameras(raw){
-  const out={B1:[],B2:[]};
-  for(const floor of ['B1','B2']){
-    out[floor]=(raw?.[floor]||[]).map((c,i)=>{
-      const lens = String(c.lens || '4');
-      const preset = LENS_PRESETS[lens] || LENS_PRESETS['4'];
-      const colorKey=c.colorKey||'red';
-      return {
-        id:c.id||`${floor}-cam-${Date.now()}-${i}`,
-        name:c.name||`CAM-${floor}-${String(i+1).padStart(2,'0')}`,
-        x:Number(c.x||0),z:Number(c.z||0),lens,
-        fov:Number(c.fov ?? preset.fov),range:Number(c.range ?? preset.range),yaw:Number(c.yaw||0),note:c.note||'',
-        colorKey,colorLabel:c.colorLabel||CAMERA_COLOR_PRESETS[colorKey]?.label||'原建置',fixed:!!c.fixed
-      };
-    });
-  }
-  return out;
+  const result = { B1: [], B2: [] };
+  ['B1','B2'].forEach(f => {
+    result[f] = (raw?.[f] || []).map((c, i) => ({
+      id: c.id || `${f}-cam-${Date.now()}-${i}`,
+      name: c.name || `CAM-${f}-${String(i+1).padStart(2, '0')}`,
+      x: Number(c.x ?? 0), z: Number(c.z ?? 0),
+      lens: String(c.lens || '4'),
+      fov: Number(c.fov ?? (LENS_PRESETS[String(c.lens || '4')]?.fov || 76)),
+      range: Number(c.range ?? (LENS_PRESETS[String(c.lens || '4')]?.range || 18)),
+      yaw: Number(c.yaw ?? 0), note: c.note || '', colorKey: c.colorKey || 'red', colorLabel: c.colorLabel || (CAMERA_COLOR_PRESETS[c.colorKey || 'red']?.label || '原建置'), fixed: !!c.fixed
+    }));
+  });
+  return result;
 }
 function sanitizeModules(raw){
-  const out={B1:[],B2:[]};
-  for(const floor of ['B1','B2']){
-    out[floor]=(raw?.[floor]||[]).map((m,i)=>({
-      id:m.id||`${floor}-mod-${Date.now()}-${i}`,type:m.type||'wall',name:m.name||`${m.type==='column'?'COL':'WALL'}-${floor}-${String(i+1).padStart(2,'0')}`,
-      x:Number(m.x||0),z:Number(m.z||0),length:Number(m.length||(m.type==='column'?.8:8)),width:Number(m.width||.8),height:Number(m.height||3),thickness:Number(m.thickness||.2),angle:Number(m.angle||0)
+  const result = { B1: [], B2: [] };
+  ['B1','B2'].forEach(f => {
+    result[f] = (raw?.[f] || []).map((m, i) => ({
+      id: m.id || `${f}-mod-${Date.now()}-${i}`,
+      type: m.type || 'wall',
+      name: m.name || `${m.type === 'column' ? 'COL' : 'WALL'}-${f}-${String(i+1).padStart(2, '0')}`,
+      x: Number(m.x ?? 0), z: Number(m.z ?? 0),
+      length: Number(m.length ?? (m.type === 'column' ? 0.8 : 8)),
+      width: Number(m.width ?? 0.8), height: Number(m.height ?? 3), thickness: Number(m.thickness ?? 0.2), angle: Number(m.angle ?? 0), fixed: !!m.fixed
     }));
-  }
-  return out;
+  });
+  return result;
 }
+function saveWorking(){
+  localStorage.setItem(WORKING_KEY, JSON.stringify({ floor: state.floor, showPlan: state.showPlan, listFilter: state.listFilter, cameras: state.cameras, modules: state.modules, selected: state.selected }));
+}
+function deepCopy(obj){ return JSON.parse(JSON.stringify(obj)); }
+function esc(s=''){ return String(s).replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch])); }
+function uid(prefix='id'){ return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2,9)}`; }
+function selCamera(){ return state.cameras[state.floor].find(x => x.id === state.selected.id && state.selected.kind === 'camera') || null; }
+function selModule(){ return state.modules[state.floor].find(x => x.id === state.selected.id && state.selected.kind === 'module') || null; }
+function setSelected(kind, id){ state.selected = { kind, id }; saveWorking(); refreshUI(); }
+function clearSelection(){ state.selected = { kind: state.listFilter === 'camera' ? 'camera' : 'module', id: null }; saveWorking(); refreshUI(); }
 
-function clearGroup(group){while(group.children.length){const o=group.children[0];group.remove(o);o.traverse?.(n=>{n.geometry?.dispose?.();if(n.material)(Array.isArray(n.material)?n.material:[n.material]).forEach(m=>m.dispose?.())})}}
 function buildFloor(){
   clearGroup(floorRoot);
-  const tex=textureLoader.load(floorData[state.floor].texture,()=>renderer.render(scene,camera));
-  tex.colorSpace=THREE.SRGBColorSpace; tex.anisotropy=renderer.capabilities.getMaxAnisotropy();
-  floorPlane=new THREE.Mesh(new THREE.PlaneGeometry(floorWidth,floorDepth),new THREE.MeshStandardMaterial({map:tex,roughness:.92,transparent:true,opacity:state.showPlan?1:.12}));
-  floorPlane.rotation.x=-Math.PI/2; floorPlane.userData.isFloor=true; floorRoot.add(floorPlane);
+  const tex = textureLoader.load(floorData[state.floor].texture, () => renderer.render(scene, camera));
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.92, metalness: 0, transparent: true, opacity: state.showPlan ? 1 : 0.12 });
+  floorPlane = new THREE.Mesh(new THREE.PlaneGeometry(FLOOR_W, FLOOR_D), mat);
+  floorPlane.rotation.x = -Math.PI / 2;
+  floorPlane.userData.kind = 'floor';
+  floorRoot.add(floorPlane);
 }
-function makeModuleVisual(m){
-  const sel=m.id===state.selectedModuleId,isWall=m.type==='wall';
-  const geo=new THREE.BoxGeometry(m.length,m.height,isWall?m.thickness:m.width);
-  const mesh=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:sel?(isWall?0x93c5fd:0xc4b5fd):(isWall?0x6487a7:0x7c73c9),transparent:true,opacity:.9,roughness:.65,emissive:sel?(isWall?0x0b2e55:0x281f56):0}));
-  mesh.position.y=m.height/2; mesh.userData={moduleId:m.id,entityType:'module'};
-  const g=new THREE.Group(); g.userData={moduleId:m.id,entityType:'module'}; g.add(mesh);
-  const edge=new THREE.LineSegments(new THREE.EdgesGeometry(geo),new THREE.LineBasicMaterial({color:sel?0xffffff:0xdbeafe,transparent:true,opacity:.55})); edge.position.copy(mesh.position); edge.userData={moduleId:m.id,entityType:'module'}; g.add(edge);
-  g.position.set(m.x,0,m.z); g.rotation.y=-THREE.MathUtils.degToRad(m.angle||0); return g;
-}
-function lighten(hex,f=.25){const c=new THREE.Color(hex);c.lerp(new THREE.Color(0xffffff),f);return c.getHex()}
-function makeCameraVisual(c){
-  const sel=c.id===state.selectedCameraId,p=CAMERA_COLOR_PRESETS[c.colorKey]||CAMERA_COLOR_PRESETS.red;
-  const g=new THREE.Group(); g.userData={cameraId:c.id,entityType:'camera'};
-  const body=new THREE.Mesh(new THREE.BoxGeometry(1.8,.8,.9),new THREE.MeshStandardMaterial({color:sel?lighten(p.body):p.body,metalness:.25,roughness:.45,emissive:sel?0x334155:0})); body.position.y=2.6; body.userData={cameraId:c.id,entityType:'camera'}; g.add(body);
-  const lens=new THREE.Mesh(new THREE.CylinderGeometry(.28,.28,.35,20),new THREE.MeshStandardMaterial({color:0x0f172a,metalness:.6,roughness:.25})); lens.rotation.z=Math.PI/2;lens.position.set(.95,2.6,0);lens.userData={cameraId:c.id,entityType:'camera'};g.add(lens);
-  const pole=new THREE.Mesh(new THREE.CylinderGeometry(.09,.09,2.2,10),new THREE.MeshStandardMaterial({color:p.body}));pole.position.y=1.45;pole.userData={cameraId:c.id,entityType:'camera'};g.add(pole);
-  const theta=THREE.MathUtils.degToRad(c.fov),r=c.range,shape=new THREE.Shape();shape.moveTo(0,0);for(let i=0;i<=28;i++){const a=-theta/2+theta*i/28;shape.lineTo(Math.cos(a)*r,Math.sin(a)*r)}shape.lineTo(0,0);
-  const cone=new THREE.Mesh(new THREE.ShapeGeometry(shape),new THREE.MeshBasicMaterial({color:p.cone,transparent:true,opacity:.17,side:THREE.DoubleSide,depthWrite:false}));cone.rotation.x=-Math.PI/2;cone.position.y=.08;cone.userData={cameraId:c.id,entityType:'camera'};g.add(cone);
-  const pts=[];[-theta/2,theta/2].forEach(a=>pts.push(new THREE.Vector3(0,.11,0),new THREE.Vector3(Math.cos(a)*r,.11,-Math.sin(a)*r)));
-  const edges=new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts),new THREE.LineBasicMaterial({color:p.line,transparent:true,opacity:.92}));edges.userData={cameraId:c.id,entityType:'camera'};g.add(edges);
-  g.position.set(c.x,0,c.z);g.rotation.y=-THREE.MathUtils.degToRad(c.yaw);return g;
-}
-function renderModules(){clearGroup(moduleRoot);state.modules[state.floor].forEach(m=>moduleRoot.add(makeModuleVisual(m)));updateModuleList();updateModuleEditor()}
-function renderCameras(){clearGroup(cameraRoot);state.cameras[state.floor].forEach(c=>cameraRoot.add(makeCameraVisual(c)));updateCameraList();updateCameraEditor()}
-function saveWorking(){localStorage.setItem('cctv3d-cameras-v1-5',JSON.stringify(state.cameras));localStorage.setItem('cctv3d-modules-v1-3',JSON.stringify(state.modules))}
-function selectedCamera(){return state.cameras[state.floor].find(c=>c.id===state.selectedCameraId)||null}
-function selectedModule(){return state.modules[state.floor].find(m=>m.id===state.selectedModuleId)||null}
-function updateStats(){cameraCount.textContent=state.cameras[state.floor].length;moduleCount.textContent=state.modules[state.floor].length;const c=selectedCamera(),m=selectedModule();selectedFov.textContent=c?`${c.fov}°`:'—';selectedModuleType.textContent=m?(m.type==='wall'?'牆體':'柱子'):'—'}
-function updateModuleList(){const a=state.modules[state.floor];moduleList.innerHTML=a.length?a.map(m=>`<div class="cam-item ${m.id===state.selectedModuleId?'selected':''}" data-id="${m.id}"><div><strong>${esc(m.name)}</strong><small>${m.type==='wall'?'牆體':'柱子'}・${m.type==='wall'?`長 ${m.length}m / 厚 ${m.thickness}m`:`長 ${m.length}m / 寬 ${m.width}m`}</small></div><span class="cam-pill ${m.type}">${m.type==='wall'?'WALL':'COLUMN'}</span></div>`).join(''):'<div class="empty-list">尚無模組</div>';moduleList.querySelectorAll('.cam-item').forEach(el=>el.onclick=()=>selectModule(el.dataset.id));updateStats()}
-function updateCameraList(){const a=state.cameras[state.floor];cameraList.innerHTML=a.length?a.map(c=>{const p=CAMERA_COLOR_PRESETS[c.colorKey]||CAMERA_COLOR_PRESETS.red;return `<div class="cam-item ${c.id===state.selectedCameraId?'selected':''}" data-id="${c.id}"><div><strong>${esc(c.name)}</strong><small>${c.lens}mm・${esc(c.colorLabel)}・FOV ${c.fov}°・${c.fixed?'固定':'可移動'}</small></div><span class="cam-pill" style="background:#${p.body.toString(16).padStart(6,'0')}">${esc(c.colorLabel)}</span></div>`}).join(''):'<div class="empty-list">尚無鏡頭</div>';cameraList.querySelectorAll('.cam-item').forEach(el=>el.onclick=()=>selectCamera(el.dataset.id));updateStats()}
-function updateModuleEditor(){const m=selectedModule();if(!m){noModule.classList.remove('hidden');moduleForm.classList.add('hidden');return}noModule.classList.add('hidden');moduleForm.classList.remove('hidden');modInputs.name.value=m.name;modInputs.type.value=m.type==='wall'?'牆體':'柱子';modInputs.length.value=m.length;modInputs.width.value=m.width;modInputs.height.value=m.height;modInputs.thickness.value=m.thickness;modInputs.angle.value=m.angle;modInputs.angleOut.value=`${m.angle}°`;modInputs.widthWrap.classList.toggle('hidden',m.type==='wall');modInputs.thicknessWrap.classList.toggle('hidden',m.type!=='wall')}
-function updateCameraEditor(){const c=selectedCamera();if(!c){noCamera.classList.remove('hidden');cameraForm.classList.add('hidden');return}noCamera.classList.add('hidden');cameraForm.classList.remove('hidden');camInputs.name.value=c.name;camInputs.lens.value=c.lens;camInputs.lensFov.value=`約 ${LENS_PRESETS[c.lens]?.fov||c.fov}°`;camInputs.color.value=c.colorKey;camInputs.colorLabel.value=c.colorLabel;camInputs.fixed.checked=c.fixed;camInputs.moveBtn.disabled=c.fixed;camInputs.moveBtn.textContent=state.addingMode==='moveCamera'?'取消移動鏡頭':'移動鏡頭位置';camInputs.fov.value=c.fov;camInputs.fovOut.value=`${c.fov}°`;camInputs.range.value=c.range;camInputs.rangeOut.value=`${c.range}m`;camInputs.yaw.value=c.yaw;camInputs.yawOut.value=`${c.yaw}°`;camInputs.note.value=c.note||''}
-function selectCamera(id){state.selectedCameraId=id;state.selectedModuleId=null;renderModules();renderCameras()}
-function selectModule(id){state.selectedModuleId=id;state.selectedCameraId=null;renderModules();renderCameras()}
-function mutateCam(fn){const c=selectedCamera();if(!c)return;fn(c);saveWorking();renderCameras()}
-function mutateMod(fn){const m=selectedModule();if(!m)return;fn(m);saveWorking();renderModules()}
-
-camInputs.name.oninput=()=>mutateCam(c=>c.name=camInputs.name.value);
-camInputs.lens.onchange=()=>mutateCam(c=>{c.lens=camInputs.lens.value;const p=LENS_PRESETS[c.lens]||LENS_PRESETS['4'];c.fov=p.fov;c.range=p.range});
-camInputs.color.onchange=()=>mutateCam(c=>{const old=CAMERA_COLOR_PRESETS[c.colorKey]?.label||'';if(!c.colorLabel||c.colorLabel===old)c.colorLabel=CAMERA_COLOR_PRESETS[camInputs.color.value].label;c.colorKey=camInputs.color.value});
-camInputs.colorLabel.oninput=()=>mutateCam(c=>c.colorLabel=camInputs.colorLabel.value||CAMERA_COLOR_PRESETS[c.colorKey].label);
-camInputs.fixed.onchange=()=>mutateCam(c=>{c.fixed=camInputs.fixed.checked;if(c.fixed&&state.addingMode==='moveCamera')setAddingMode(null)});
-camInputs.moveBtn.onclick=()=>{const c=selectedCamera();if(c&&!c.fixed)setAddingMode('moveCamera')};
-camInputs.fov.oninput=()=>mutateCam(c=>c.fov=+camInputs.fov.value);
-camInputs.range.oninput=()=>mutateCam(c=>c.range=+camInputs.range.value);
-camInputs.yaw.oninput=()=>mutateCam(c=>c.yaw=+camInputs.yaw.value);
-camInputs.note.oninput=()=>mutateCam(c=>c.note=camInputs.note.value);
-$('deleteCamBtn').onclick=()=>{const c=selectedCamera();if(!c)return;state.cameras[state.floor]=state.cameras[state.floor].filter(x=>x.id!==c.id);state.selectedCameraId=null;saveWorking();renderCameras()};
-modInputs.name.oninput=()=>mutateMod(m=>m.name=modInputs.name.value);
-modInputs.length.oninput=()=>mutateMod(m=>m.length=Math.max(.2,+modInputs.length.value||.2));
-modInputs.width.oninput=()=>mutateMod(m=>m.width=Math.max(.2,+modInputs.width.value||.2));
-modInputs.height.oninput=()=>mutateMod(m=>m.height=Math.max(.2,+modInputs.height.value||.2));
-modInputs.thickness.oninput=()=>mutateMod(m=>m.thickness=Math.max(.05,+modInputs.thickness.value||.05));
-modInputs.angle.oninput=()=>mutateMod(m=>m.angle=+modInputs.angle.value);
-$('deleteModuleBtn').onclick=()=>{const m=selectedModule();if(!m)return;state.modules[state.floor]=state.modules[state.floor].filter(x=>x.id!==m.id);state.selectedModuleId=null;saveWorking();renderModules()};
-$('clearModuleBtn').onclick=()=>{if(state.modules[state.floor].length&&confirm(`確定清除 ${state.floor} 全部模組？`)){state.modules[state.floor]=[];state.selectedModuleId=null;saveWorking();renderModules()}};
-
-function setAddingMode(mode){if(mode==='moveCamera'){const c=selectedCamera();if(!c||c.fixed)return}state.addingMode=state.addingMode===mode?null:mode;controls.enabled=!state.addingMode;addHint.classList.toggle('hidden',!state.addingMode);const txt={camera:'請在圖面上點一下放置監視器',wall:'請在圖面上點一下放置牆體',column:'請在圖面上點一下放置柱子',moveCamera:'請在圖面上點一下新的鏡頭位置'};addHint.textContent=txt[state.addingMode]||'';updateAddButtons();updateCameraEditor()}
-function updateAddButtons(){const map={addCameraBtn:'camera',addWallBtn:'wall',drawerAddWallBtn:'wall',addColumnBtn:'column',drawerAddColumnBtn:'column'};Object.entries(map).forEach(([id,m])=>$(id)?.classList.toggle('active',state.addingMode===m));$('addCameraBtn').textContent=state.addingMode==='camera'?'取消新增鏡頭':'＋ 新增鏡頭';$('addWallBtn').textContent=state.addingMode==='wall'?'取消新增牆體':'＋ 新增牆體';$('drawerAddWallBtn').textContent=state.addingMode==='wall'?'取消牆體':'新增牆體';$('addColumnBtn').textContent=state.addingMode==='column'?'取消新增柱子':'＋ 新增柱子';$('drawerAddColumnBtn').textContent=state.addingMode==='column'?'取消柱子':'新增柱子'}
-$('addCameraBtn').onclick=()=>setAddingMode('camera');$('addWallBtn').onclick=()=>setAddingMode('wall');$('drawerAddWallBtn').onclick=()=>setAddingMode('wall');$('addColumnBtn').onclick=()=>setAddingMode('column');$('drawerAddColumnBtn').onclick=()=>setAddingMode('column');
-
-const raycaster=new THREE.Raycaster(),mouse=new THREE.Vector2();
-renderer.domElement.addEventListener('pointerdown',e=>{
-  const r=renderer.domElement.getBoundingClientRect();mouse.x=((e.clientX-r.left)/r.width)*2-1;mouse.y=-((e.clientY-r.top)/r.height)*2+1;raycaster.setFromCamera(mouse,camera);
-  if(state.addingMode){const hit=raycaster.intersectObject(floorPlane,false)[0];if(!hit)return;const x=+hit.point.x.toFixed(2),z=+hit.point.z.toFixed(2);
-    if(state.addingMode==='camera'){const n=state.cameras[state.floor].length+1,p=LENS_PRESETS['4'];const c={id:crypto.randomUUID?.()||`${Date.now()}-${Math.random()}`,name:`CAM-${state.floor}-${String(n).padStart(2,'0')}`,x,z,lens:'4',fov:p.fov,range:p.range,yaw:0,note:'',colorKey:'red',colorLabel:'原建置',fixed:false};state.cameras[state.floor].push(c);state.selectedCameraId=c.id;state.selectedModuleId=null;saveWorking();setAddingMode(null);renderModules();renderCameras();return}
-    if(state.addingMode==='moveCamera'){const c=selectedCamera();if(c&&!c.fixed){c.x=x;c.z=z;saveWorking();setAddingMode(null);renderCameras()}return}
-    const type=state.addingMode,n=state.modules[state.floor].filter(m=>m.type===type).length+1;const m={id:crypto.randomUUID?.()||`${Date.now()}-${Math.random()}`,type,name:`${type==='wall'?'WALL':'COL'}-${state.floor}-${String(n).padStart(2,'0')}`,x,z,length:type==='wall'?8:.8,width:.8,height:3,thickness:.2,angle:0};state.modules[state.floor].push(m);state.selectedModuleId=m.id;state.selectedCameraId=null;saveWorking();setAddingMode(null);renderModules();renderCameras();return
+function clearGroup(group){
+  while(group.children.length){
+    const obj = group.children[0];
+    group.remove(obj);
+    obj.traverse?.(n => {
+      n.geometry?.dispose?.();
+      if(n.material) (Array.isArray(n.material) ? n.material : [n.material]).forEach(m => m.dispose?.());
+    });
   }
-  const hits=raycaster.intersectObjects([...moduleRoot.children,...cameraRoot.children],true);if(hits.length){const o=hits[0].object,camId=o.userData.cameraId||o.parent?.userData.cameraId||o.parent?.parent?.userData.cameraId,modId=o.userData.moduleId||o.parent?.userData.moduleId||o.parent?.parent?.userData.moduleId;if(camId){selectCamera(camId);return}if(modId){selectModule(modId);return}}
-  state.selectedCameraId=null;state.selectedModuleId=null;renderModules();renderCameras();
+}
+function colorToHex(n){ return `#${n.toString(16).padStart(6, '0')}`; }
+function lightHex(hex, amt=.2){ const c = new THREE.Color(hex); c.lerp(new THREE.Color(0xffffff), amt); return c.getHex(); }
+
+function makeCameraMesh(data){
+  const selected = state.selected.kind === 'camera' && state.selected.id === data.id;
+  const preset = CAMERA_COLOR_PRESETS[data.colorKey] || CAMERA_COLOR_PRESETS.red;
+  const g = new THREE.Group(); g.userData = { kind: 'camera', id: data.id };
+  const bodyColor = selected ? lightHex(preset.body, 0.22) : preset.body;
+  const body = new THREE.Mesh(new THREE.BoxGeometry(1.8, .8, .9), new THREE.MeshStandardMaterial({ color: bodyColor, metalness: .25, roughness: .45, emissive: selected ? 0x334155 : 0x000000 }));
+  body.position.y = 2.6; body.userData = { kind: 'camera', id: data.id }; g.add(body);
+  const lens = new THREE.Mesh(new THREE.CylinderGeometry(.28, .28, .35, 18), new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: .6, roughness: .25 }));
+  lens.rotation.z = Math.PI/2; lens.position.set(.95, 2.6, 0); lens.userData = { kind: 'camera', id: data.id }; g.add(lens);
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(.09, .09, 2.2, 12), new THREE.MeshStandardMaterial({ color: bodyColor }));
+  pole.position.y = 1.45; pole.userData = { kind: 'camera', id: data.id }; g.add(pole);
+  const ring = new THREE.Mesh(new THREE.CylinderGeometry(.55, .65, .12, 18), new THREE.MeshStandardMaterial({ color: selected ? 0xffffff : preset.body, transparent: true, opacity: .95 }));
+  ring.position.y = .06; ring.userData = { kind: 'camera', id: data.id }; g.add(ring);
+  const theta = THREE.MathUtils.degToRad(data.fov); const r = data.range;
+  const shape = new THREE.Shape(); shape.moveTo(0,0);
+  for(let i=0;i<=32;i++){
+    const a = -theta/2 + theta * (i/32);
+    shape.lineTo(Math.cos(a)*r, Math.sin(a)*r);
+  }
+  shape.lineTo(0,0);
+  const cone = new THREE.Mesh(new THREE.ShapeGeometry(shape), new THREE.MeshBasicMaterial({ color: preset.cone, transparent: true, opacity: .16, side: THREE.DoubleSide, depthWrite: false }));
+  cone.rotation.x = -Math.PI/2; cone.position.y = .08; cone.userData = { kind: 'camera', id: data.id }; g.add(cone);
+  const pts=[]; [-theta/2, theta/2].forEach(a => pts.push(new THREE.Vector3(0,.11,0), new THREE.Vector3(Math.cos(a)*r, .11, -Math.sin(a)*r)));
+  const edge = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: preset.line, transparent:true, opacity:.9 }));
+  edge.userData = { kind: 'camera', id: data.id }; g.add(edge);
+  g.position.set(data.x, 0, data.z); g.rotation.y = -THREE.MathUtils.degToRad(data.yaw);
+  return g;
+}
+function makeModuleMesh(data){
+  const selected = state.selected.kind === 'module' && state.selected.id === data.id;
+  const isWall = data.type === 'wall';
+  const group = new THREE.Group(); group.userData = { kind: 'module', id: data.id };
+  const geom = new THREE.BoxGeometry(isWall ? data.length : data.length, data.height, isWall ? data.thickness : data.width);
+  const mat = new THREE.MeshStandardMaterial({ color: selected ? (isWall ? 0x93c5fd : 0xc4b5fd) : (isWall ? 0x6487a7 : 0x7c73c9), transparent:true, opacity:.9, roughness:.65, metalness:.04, emissive: selected ? (isWall ? 0x0b2e55 : 0x281f56) : 0x000000 });
+  const mesh = new THREE.Mesh(geom, mat); mesh.position.y = data.height / 2; mesh.userData = { kind: 'module', id: data.id }; group.add(mesh);
+  const edge = new THREE.LineSegments(new THREE.EdgesGeometry(geom), new THREE.LineBasicMaterial({ color: selected ? 0xffffff : 0xdbeafe, transparent:true, opacity:.55 }));
+  edge.position.copy(mesh.position); edge.userData = { kind: 'module', id: data.id }; group.add(edge);
+  group.position.set(data.x, 0, data.z); group.rotation.y = -THREE.MathUtils.degToRad(data.angle || 0);
+  return group;
+}
+function renderObjects(){
+  clearGroup(cameraRoot); clearGroup(moduleRoot); clearGroup(draftRoot);
+  state.cameras[state.floor].forEach(c => cameraRoot.add(makeCameraMesh(c)));
+  state.modules[state.floor].forEach(m => moduleRoot.add(makeModuleMesh(m)));
+  renderWallDraft();
+}
+
+function renderWallDraft(){
+  clearGroup(draftRoot);
+  if(draftWall.points.length === 0) return;
+  const points = [...draftWall.points];
+  if(draftWall.mousePoint) points.push(draftWall.mousePoint);
+  if(points.length >= 2){
+    const worldPts = points.map(p => new THREE.Vector3(p.x, 0.15, p.z));
+    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(worldPts), new THREE.LineBasicMaterial({ color: 0xf59e0b, linewidth: 2 }));
+    draftRoot.add(line);
+  }
+  draftWall.points.forEach(p => {
+    const marker = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 12), new THREE.MeshStandardMaterial({ color: 0xf59e0b }));
+    marker.position.set(p.x, 0.15, p.z); draftRoot.add(marker);
+  });
+}
+
+function refreshUI(){
+  els.floorTitle.textContent = floorData[state.floor].title;
+  els.floorChip.textContent = state.floor;
+  els.statusText.textContent = `${state.floor} 模型已載入｜版本 ${APP_VERSION}`;
+  els.listFilter.value = state.listFilter;
+  els.cameraCount.textContent = state.cameras[state.floor].length;
+  els.moduleCount.textContent = state.modules[state.floor].length;
+  const cam = selCamera(); const mod = selModule();
+  els.selectedFov.textContent = cam ? `${cam.fov}°` : '—';
+  els.selectedType.textContent = cam ? '鏡頭' : mod ? (mod.type === 'wall' ? '牆體' : '柱子') : '—';
+  updateCameraEditor(); updateModuleEditor(); updateItemList();
+  floorTabs.forEach(btn => btn.classList.toggle('active', btn.dataset.floor === state.floor));
+  $('planToggleBtn').classList.toggle('active', state.showPlan); $('planToggleBtn').textContent = `平面底圖：${state.showPlan ? '開' : '關'}`;
+}
+function updateCameraEditor(){
+  const c = selCamera();
+  if(!c){ els.noCamera.classList.remove('hidden'); els.cameraForm.classList.add('hidden'); return; }
+  els.noCamera.classList.add('hidden'); els.cameraForm.classList.remove('hidden');
+  camInputs.name.value = c.name; camInputs.lens.value = String(c.lens);
+  camInputs.lensFov.value = `${LENS_PRESETS[String(c.lens)]?.fov ?? c.fov}°`;
+  camInputs.color.value = c.colorKey; camInputs.colorLabel.value = c.colorLabel; camInputs.fixed.checked = !!c.fixed;
+  camInputs.fov.value = c.fov; camInputs.fovOut.value = `${c.fov}°`;
+  camInputs.range.value = c.range; camInputs.rangeOut.value = `${c.range}m`;
+  camInputs.yaw.value = c.yaw; camInputs.yawOut.value = `${c.yaw}°`;
+  camInputs.note.value = c.note || '';
+}
+function updateModuleEditor(){
+  const m = selModule();
+  if(!m){ els.noModule.classList.remove('hidden'); els.moduleForm.classList.add('hidden'); return; }
+  els.noModule.classList.add('hidden'); els.moduleForm.classList.remove('hidden');
+  modInputs.name.value = m.name; modInputs.type.value = m.type === 'wall' ? '牆體' : '柱子'; modInputs.length.value = m.length; modInputs.width.value = m.width; modInputs.height.value = m.height; modInputs.thickness.value = m.thickness; modInputs.angle.value = m.angle; modInputs.angleOut.value = `${m.angle}°`; modInputs.fixed.checked = !!m.fixed;
+  modInputs.widthWrap.classList.toggle('hidden', m.type === 'wall'); modInputs.thicknessWrap.classList.toggle('hidden', m.type !== 'wall');
+}
+function updateItemList(){
+  const filter = state.listFilter;
+  let items = [];
+  if(filter === 'camera' || filter === 'all') items.push(...state.cameras[state.floor].map(x => ({ kind: 'camera', data: x })));
+  if(filter === 'wall' || filter === 'all') items.push(...state.modules[state.floor].filter(x => x.type === 'wall').map(x => ({ kind: 'module', data: x })));
+  if(filter === 'column' || filter === 'all') items.push(...state.modules[state.floor].filter(x => x.type === 'column').map(x => ({ kind: 'module', data: x })));
+  if(!items.length){ els.itemList.innerHTML = '<div class="empty-list">目前篩選類別沒有資料</div>'; return; }
+  els.itemList.innerHTML = items.map(({kind, data}) => {
+    if(kind === 'camera'){
+      const preset = CAMERA_COLOR_PRESETS[data.colorKey] || CAMERA_COLOR_PRESETS.red;
+      const selected = state.selected.kind === 'camera' && state.selected.id === data.id ? 'selected' : '';
+      return `<div class="item ${selected}" data-kind="camera" data-id="${esc(data.id)}"><div><strong>${esc(data.name)}</strong><small>${esc(data.colorLabel)}・${data.fixed ? '固定' : '可移動'}・FOV ${data.fov}°</small></div><span class="pill" style="background:${colorToHex(preset.body)}">${esc(data.colorLabel)}</span></div>`;
+    }
+    const selected = state.selected.kind === 'module' && state.selected.id === data.id ? 'selected' : '';
+    const pillCls = data.type === 'wall' ? 'wall' : 'column';
+    const desc = data.type === 'wall' ? `長 ${data.length} / 厚 ${data.thickness}` : `長 ${data.length} / 寬 ${data.width}`;
+    return `<div class="item ${selected}" data-kind="module" data-id="${esc(data.id)}"><div><strong>${esc(data.name)}</strong><small>${data.type === 'wall' ? '牆體' : '柱子'}・${data.fixed ? '固定' : '可移動'}・${desc}</small></div><span class="pill ${pillCls}">${data.type === 'wall' ? 'WALL' : 'COLUMN'}</span></div>`;
+  }).join('');
+  els.itemList.querySelectorAll('.item').forEach(el => el.addEventListener('click', () => setSelected(el.dataset.kind, el.dataset.id)));
+}
+
+function mutateCamera(mut){ const c = selCamera(); if(!c) return; mut(c); saveWorking(); renderObjects(); refreshUI(); }
+function mutateModule(mut){ const m = selModule(); if(!m) return; mut(m); saveWorking(); renderObjects(); refreshUI(); }
+camInputs.name.oninput = () => mutateCamera(c => c.name = camInputs.name.value);
+camInputs.lens.onchange = () => mutateCamera(c => { c.lens = camInputs.lens.value; const preset = LENS_PRESETS[c.lens]; c.fov = preset.fov; c.range = preset.range; if(!c.colorLabel) c.colorLabel = CAMERA_COLOR_PRESETS[c.colorKey]?.label || '原建置'; });
+camInputs.color.onchange = () => mutateCamera(c => { const oldPreset = CAMERA_COLOR_PRESETS[c.colorKey] || CAMERA_COLOR_PRESETS.red; const current = (c.colorLabel || '').trim(); c.colorKey = camInputs.color.value; if(!current || current === oldPreset.label){ c.colorLabel = CAMERA_COLOR_PRESETS[c.colorKey]?.label || current; } });
+camInputs.colorLabel.oninput = () => mutateCamera(c => c.colorLabel = camInputs.colorLabel.value || (CAMERA_COLOR_PRESETS[c.colorKey]?.label || ''));
+camInputs.fixed.onchange = () => mutateCamera(c => c.fixed = camInputs.fixed.checked);
+camInputs.fov.oninput = () => mutateCamera(c => c.fov = +camInputs.fov.value);
+camInputs.range.oninput = () => mutateCamera(c => c.range = +camInputs.range.value);
+camInputs.yaw.oninput = () => mutateCamera(c => c.yaw = +camInputs.yaw.value);
+camInputs.note.oninput = () => mutateCamera(c => c.note = camInputs.note.value);
+$('deleteCamBtn').onclick = () => { const c = selCamera(); if(!c) return; state.cameras[state.floor] = state.cameras[state.floor].filter(x => x.id !== c.id); clearSelection(); saveWorking(); renderObjects(); refreshUI(); };
+
+modInputs.name.oninput = () => mutateModule(m => m.name = modInputs.name.value);
+modInputs.length.oninput = () => mutateModule(m => m.length = Math.max(.2, +modInputs.length.value || .2));
+modInputs.width.oninput = () => mutateModule(m => m.width = Math.max(.2, +modInputs.width.value || .2));
+modInputs.height.oninput = () => mutateModule(m => m.height = Math.max(.2, +modInputs.height.value || .2));
+modInputs.thickness.oninput = () => mutateModule(m => m.thickness = Math.max(.05, +modInputs.thickness.value || .05));
+modInputs.angle.oninput = () => mutateModule(m => m.angle = +modInputs.angle.value);
+modInputs.fixed.onchange = () => mutateModule(m => m.fixed = modInputs.fixed.checked);
+$('deleteModuleBtn').onclick = () => { const m = selModule(); if(!m) return; state.modules[state.floor] = state.modules[state.floor].filter(x => x.id !== m.id); clearSelection(); saveWorking(); renderObjects(); refreshUI(); };
+$('clearModuleBtn').onclick = () => { if(!state.modules[state.floor].length) return; if(confirm(`確定清除 ${state.floor} 全部模組？`)){ state.modules[state.floor] = []; if(state.selected.kind === 'module') clearSelection(); saveWorking(); renderObjects(); refreshUI(); } };
+
+function setAddMode(mode){
+  if(state.addMode === mode){ state.addMode = null; if(mode === 'wall') draftWall = { points: [], mousePoint: null }; }
+  else { state.addMode = mode; if(mode !== 'wall') draftWall = { points: [], mousePoint: null }; }
+  controls.enabled = !state.addMode && !dragState;
+  const hintMap = { camera: '請在圖面點一下新增鏡頭', column: '請在圖面點一下新增柱子', wall: '牆體折線：可連續點多個點，按 Enter 完成，Esc 取消' };
+  els.addHint.classList.toggle('hidden', !state.addMode);
+  els.addHint.textContent = hintMap[state.addMode] || '請在圖面上操作';
+  $('addCameraBtn').classList.toggle('active', state.addMode === 'camera'); $('addWallBtn').classList.toggle('active', state.addMode === 'wall'); $('drawerAddWallBtn').classList.toggle('active', state.addMode === 'wall'); $('addColumnBtn').classList.toggle('active', state.addMode === 'column'); $('drawerAddColumnBtn').classList.toggle('active', state.addMode === 'column');
+  $('addCameraBtn').textContent = state.addMode === 'camera' ? '取消新增鏡頭' : '＋ 新增鏡頭';
+  $('addWallBtn').textContent = state.addMode === 'wall' ? '取消折線牆體' : '＋ 折線牆體';
+  $('drawerAddWallBtn').textContent = state.addMode === 'wall' ? '取消折線' : '折線牆體';
+  $('addColumnBtn').textContent = state.addMode === 'column' ? '取消新增柱子' : '＋ 新增柱子';
+  $('drawerAddColumnBtn').textContent = state.addMode === 'column' ? '取消柱子' : '新增柱子';
+  renderObjects();
+}
+$('addCameraBtn').onclick = () => setAddMode('camera'); $('addWallBtn').onclick = () => setAddMode('wall'); $('drawerAddWallBtn').onclick = () => setAddMode('wall'); $('addColumnBtn').onclick = () => setAddMode('column'); $('drawerAddColumnBtn').onclick = () => setAddMode('column');
+
+function getWorldPointFromEvent(evt){
+  const rect = renderer.domElement.getBoundingClientRect();
+  pointer.x = ((evt.clientX - rect.left) / rect.width) * 2 - 1;
+  pointer.y = -((evt.clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(pointer, camera);
+  const hit = raycaster.intersectObject(floorPlane, false)[0];
+  if(hit) return { x: +hit.point.x.toFixed(2), z: +hit.point.z.toFixed(2) };
+  const p = new THREE.Vector3(); if(raycaster.ray.intersectPlane(dragPlane, p)) return { x: +p.x.toFixed(2), z: +p.z.toFixed(2) };
+  return null;
+}
+function getHitEntity(evt){
+  const rect = renderer.domElement.getBoundingClientRect();
+  pointer.x = ((evt.clientX - rect.left) / rect.width) * 2 - 1;
+  pointer.y = -((evt.clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(pointer, camera);
+  const hits = raycaster.intersectObjects([...cameraRoot.children, ...moduleRoot.children], true);
+  if(!hits.length) return null;
+  let o = hits[0].object;
+  while(o){ if(o.userData?.kind && o.userData?.id) return o.userData; o = o.parent; }
+  return null;
+}
+
+renderer.domElement.addEventListener('pointerdown', evt => {
+  const world = getWorldPointFromEvent(evt);
+  if(state.addMode === 'camera'){ if(!world) return; const p = LENS_PRESETS['4']; const n = state.cameras[state.floor].length + 1; const c = { id: uid('cam'), name: `CAM-${state.floor}-${String(n).padStart(2,'0')}`, x: world.x, z: world.z, lens: '4', fov: p.fov, range: p.range, yaw: 0, note: '', colorKey: 'red', colorLabel: '原建置', fixed: false }; state.cameras[state.floor].push(c); setSelected('camera', c.id); saveWorking(); renderObjects(); refreshUI(); setAddMode(null); return; }
+  if(state.addMode === 'column'){ if(!world) return; const n = state.modules[state.floor].filter(x => x.type === 'column').length + 1; const m = { id: uid('col'), type: 'column', name: `COL-${state.floor}-${String(n).padStart(2,'0')}`, x: world.x, z: world.z, length: .8, width: .8, height: 3, thickness: .8, angle: 0, fixed: false }; state.modules[state.floor].push(m); setSelected('module', m.id); saveWorking(); renderObjects(); refreshUI(); setAddMode(null); return; }
+  if(state.addMode === 'wall'){ if(!world) return; draftWall.points.push(world); draftWall.mousePoint = world; renderObjects(); return; }
+
+  const hit = getHitEntity(evt);
+  if(hit){
+    setSelected(hit.kind, hit.id);
+    const item = hit.kind === 'camera' ? selCamera() : selModule();
+    if(item && !item.fixed && world){ dragState = { kind: hit.kind, id: hit.id }; controls.enabled = false; }
+    return;
+  }
+  clearSelection();
 });
-
-$('planToggleBtn').onclick=e=>{state.showPlan=!state.showPlan;if(floorPlane)floorPlane.material.opacity=state.showPlan?1:.12;e.currentTarget.classList.toggle('active',state.showPlan);e.currentTarget.textContent=`平面底圖：${state.showPlan?'開':'關'}`};
-$('view3dBtn').onclick=()=>{camera.position.set(0,72,86);controls.target.set(0,0,0);controls.update()};
-$('topViewBtn').onclick=()=>{camera.position.set(0,125,.01);controls.target.set(0,0,0);controls.update()};
-$('resetViewBtn').onclick=resetView;
-function resetView(){camera.position.set(0,72,86);controls.target.set(0,0,0);controls.update()}
-floorTabs.forEach(btn=>btn.onclick=()=>switchFloor(btn.dataset.floor));
-function switchFloor(f){state.floor=f;state.selectedCameraId=null;state.selectedModuleId=null;setAddingMode(null);floorTabs.forEach(b=>b.classList.toggle('active',b.dataset.floor===f));floorTitle.textContent=floorData[f].title;floorChip.textContent=f;buildFloor();renderModules();renderCameras();resetView();statusText.textContent=`${f} 模型已載入｜版本 ${APP_VERSION}`}
-
-// ---------- 專案資料夾 / 儲存 / 讀取 / 刪除 ----------
-const STORAGE_KEY='cctv3d-project-store-v1-6';
-const STORAGE_KEY_PREV='cctv3d-project-store-v1-5';
-function getStore(){
-  try{
-    const raw=localStorage.getItem(STORAGE_KEY)||localStorage.getItem(STORAGE_KEY_PREV);
-    return JSON.parse(raw)||{folders:[{id:'root',name:'我的專案'}],projects:[]};
-  }catch{return {folders:[{id:'root',name:'我的專案'}],projects:[]}}
-}
-function setStore(s){localStorage.setItem(STORAGE_KEY,JSON.stringify(s))}
-function ensureStore(){const s=getStore();if(!s.folders?.length)s.folders=[{id:'root',name:'我的專案'}];if(!s.projects)s.projects=[];setStore(s);return s}
-function renderStorage(){const s=ensureStore();const current=projectFolder.value||s.folders[0].id;projectFolder.innerHTML=s.folders.map(f=>`<option value="${esc(f.id)}">${esc(f.name)}</option>`).join('');projectFolder.value=s.folders.some(f=>f.id===current)?current:s.folders[0].id;const list=s.projects.filter(p=>p.folderId===projectFolder.value).sort((a,b)=>b.updatedAt-a.updatedAt);savedCount.textContent=`${list.length} 筆`;projectList.innerHTML=list.length?list.map(p=>`<div class="cam-item project-item" data-id="${esc(p.id)}"><div><strong>${esc(p.name)}</strong><small>${new Date(p.updatedAt).toLocaleString()}・${esc(p.version||'')}</small></div><div class="project-actions"><button data-act="load" data-id="${esc(p.id)}">讀取</button><button data-act="delete" data-id="${esc(p.id)}">刪除</button></div></div>`).join(''):'<div class="empty-list">此資料夾尚無儲存專案</div>';projectList.querySelectorAll('button').forEach(b=>b.onclick=e=>{e.stopPropagation();b.dataset.act==='load'?loadProject(b.dataset.id):deleteProject(b.dataset.id)});projectList.querySelectorAll('.project-item').forEach(el=>el.onclick=()=>{const s2=getStore(),p=s2.projects.find(x=>x.id===el.dataset.id);if(p)projectName.value=p.name})}
-projectFolder.onchange=renderStorage;
-$('newFolderBtn').onclick=()=>{const name=prompt('輸入新資料夾名稱：');if(!name?.trim())return;const s=ensureStore(),f={id:crypto.randomUUID?.()||`folder-${Date.now()}`,name:name.trim()};s.folders.push(f);setStore(s);renderStorage();projectFolder.value=f.id;renderStorage()};
-$('deleteFolderBtn').onclick=()=>{const s=ensureStore(),id=projectFolder.value;if(id==='root'){alert('「我的專案」為預設資料夾，不能刪除。');return}const f=s.folders.find(x=>x.id===id);if(!f)return;const count=s.projects.filter(p=>p.folderId===id).length;if(!confirm(`刪除資料夾「${f.name}」？${count?`\n裡面的 ${count} 個專案也會一起刪除。`:''}`))return;s.folders=s.folders.filter(x=>x.id!==id);s.projects=s.projects.filter(p=>p.folderId!==id);setStore(s);renderStorage()};
-$('saveProjectBtn').onclick=()=>{const name=projectName.value.trim();if(!name){alert('請先輸入專案名稱。');return}const s=ensureStore(),folderId=projectFolder.value;let p=s.projects.find(x=>x.folderId===folderId&&x.name===name);const payload={floor:state.floor,cameras:structuredClone(state.cameras),modules:structuredClone(state.modules),showPlan:state.showPlan};if(p){p.data=payload;p.updatedAt=Date.now();p.version=APP_VERSION}else{p={id:crypto.randomUUID?.()||`project-${Date.now()}`,folderId,name,data:payload,updatedAt:Date.now(),version:APP_VERSION};s.projects.push(p)}setStore(s);renderStorage();statusText.textContent=`已儲存：${name}｜${APP_VERSION}`};
-function loadProject(id){const s=ensureStore(),p=s.projects.find(x=>x.id===id);if(!p)return;if(!confirm(`讀取「${p.name}」？目前未儲存的變更會被取代。`))return;state.cameras=sanitizeCameras(p.data.cameras);state.modules=sanitizeModules(p.data.modules);state.floor=p.data.floor||'B1';state.showPlan=p.data.showPlan!==false;projectName.value=p.name;floorTabs.forEach(b=>b.classList.toggle('active',b.dataset.floor===state.floor));floorTitle.textContent=floorData[state.floor].title;floorChip.textContent=state.floor;buildFloor();renderModules();renderCameras();saveWorking();resetView();statusText.textContent=`已讀取：${p.name}｜${p.version||APP_VERSION}`}
-function deleteProject(id){const s=ensureStore(),p=s.projects.find(x=>x.id===id);if(!p)return;if(!confirm(`確定刪除專案「${p.name}」？`))return;s.projects=s.projects.filter(x=>x.id!==id);setStore(s);renderStorage()}
-
-function buildProjectFilePayload(){
-  const folderText=projectFolder?.selectedOptions?.[0]?.textContent?.trim()||'我的專案';
-  const name=projectName.value.trim()||`CCTV專案-${new Date().toISOString().slice(0,10)}`;
-  return {
-    format:'UTOP-CCTV-3D-PROJECT',
-    schemaVersion:1,
-    appVersion:APP_VERSION,
-    company:'昱拓弱電有限公司',
-    name,
-    folder:folderText,
-    exportedAt:new Date().toISOString(),
-    data:{
-      floor:state.floor,
-      cameras:structuredClone(state.cameras),
-      modules:structuredClone(state.modules),
-      showPlan:state.showPlan
-    }
-  };
-}
-function safeFileName(name){return String(name||'CCTV專案').replace(/[\\/:*?"<>|]+/g,'_').trim()||'CCTV專案'}
-async function exportProjectFile(){
-  const payload=buildProjectFilePayload();
-  const text=JSON.stringify(payload,null,2);
-  const suggested=`${safeFileName(payload.name)}_${APP_VERSION}.utop3d`;
-  try{
-    if('showSaveFilePicker' in window){
-      const handle=await window.showSaveFilePicker({
-        suggestedName:suggested,
-        types:[{description:'昱拓 CCTV 3D 專案檔',accept:{'application/json':['.utop3d','.json']}}]
-      });
-      const writable=await handle.createWritable();
-      await writable.write(text);
-      await writable.close();
-      statusText.textContent=`已匯出專案檔：${payload.name}｜${APP_VERSION}`;
-      return;
-    }
-    const blob=new Blob([text],{type:'application/json'});
-    const url=URL.createObjectURL(blob);
-    const link=document.createElement('a');
-    link.href=url;link.download=suggested;document.body.appendChild(link);link.click();link.remove();URL.revokeObjectURL(url);
-    statusText.textContent=`已下載專案檔：${payload.name}｜${APP_VERSION}`;
-  }catch(err){
-    if(err?.name!=='AbortError') alert(`匯出失敗：${err?.message||err}`);
+renderer.domElement.addEventListener('pointermove', evt => {
+  const world = getWorldPointFromEvent(evt);
+  if(state.addMode === 'wall' && draftWall.points.length){ draftWall.mousePoint = world; renderObjects(); return; }
+  if(!dragState || !world) return;
+  const target = dragState.kind === 'camera' ? state.cameras[state.floor].find(x => x.id === dragState.id) : state.modules[state.floor].find(x => x.id === dragState.id);
+  if(!target || target.fixed) return;
+  target.x = world.x; target.z = world.z; saveWorking(); renderObjects(); refreshUI();
+});
+['pointerup','pointerleave','pointercancel'].forEach(type => renderer.domElement.addEventListener(type, () => { if(dragState){ dragState = null; controls.enabled = !state.addMode; } }));
+window.addEventListener('keydown', evt => {
+  if(state.addMode !== 'wall') return;
+  if(evt.key === 'Escape'){ draftWall = { points: [], mousePoint: null }; setAddMode(null); return; }
+  if(evt.key === 'Enter') finalizeWallDraft();
+});
+function finalizeWallDraft(){
+  if(draftWall.points.length < 2){ alert('牆體至少需要兩個點位。'); return; }
+  const baseIndex = state.modules[state.floor].filter(x => x.type === 'wall').length + 1;
+  for(let i=0;i<draftWall.points.length-1;i++){
+    const a = draftWall.points[i], b = draftWall.points[i+1];
+    const dx = b.x - a.x, dz = b.z - a.z; const len = +Math.hypot(dx, dz).toFixed(2); if(len < 0.2) continue;
+    const angle = (Math.atan2(-dz, dx) * 180 / Math.PI + 360) % 360;
+    state.modules[state.floor].push({ id: uid('wall'), type: 'wall', name: `WALL-${state.floor}-${String(baseIndex + i).padStart(2,'0')}`, x: +( (a.x+b.x)/2 ).toFixed(2), z: +( (a.z+b.z)/2 ).toFixed(2), length: len, width: .2, height: 3, thickness: .2, angle: +angle.toFixed(1), fixed: false });
   }
+  draftWall = { points: [], mousePoint: null };
+  saveWorking(); renderObjects(); refreshUI(); setAddMode(null);
 }
-function normalizeImportedProject(raw){
-  if(raw?.format==='UTOP-CCTV-3D-PROJECT'&&raw?.data) return raw;
-  if(raw?.data?.cameras&&raw?.data?.modules) return {format:'UTOP-CCTV-3D-PROJECT',schemaVersion:1,appVersion:raw.version||'舊版',name:raw.name||'匯入專案',folder:'我的專案',data:raw.data};
-  if(raw?.cameras&&raw?.modules) return {format:'UTOP-CCTV-3D-PROJECT',schemaVersion:1,appVersion:'舊版',name:'匯入專案',folder:'我的專案',data:raw};
-  throw new Error('這個檔案不是可辨識的 CCTV 3D 專案檔。');
-}
-async function importProjectFromFile(file){
-  try{
-    const text=await file.text();
-    const parsed=normalizeImportedProject(JSON.parse(text));
-    if(!confirm(`匯入「${parsed.name||file.name}」？目前尚未儲存的變更會被取代。`)) return;
-    state.cameras=sanitizeCameras(parsed.data.cameras);
-    state.modules=sanitizeModules(parsed.data.modules);
-    state.floor=parsed.data.floor==='B2'?'B2':'B1';
-    state.showPlan=parsed.data.showPlan!==false;
-    state.selectedCameraId=null;state.selectedModuleId=null;state.addingMode=null;
-    projectName.value=parsed.name||file.name.replace(/\.(utop3d|json)$/i,'');
-    floorTabs.forEach(b=>b.classList.toggle('active',b.dataset.floor===state.floor));
-    floorTitle.textContent=floorData[state.floor].title;floorChip.textContent=state.floor;
-    buildFloor();renderModules();renderCameras();saveWorking();resetView();
-    statusText.textContent=`已匯入：${projectName.value}｜來源 ${parsed.appVersion||'未知版本'}`;
-  }catch(err){alert(`匯入失敗：${err?.message||err}`)}
-  finally{importProjectFile.value=''}
-}
-exportProjectBtn.onclick=exportProjectFile;
-importProjectBtn.onclick=()=>importProjectFile.click();
-importProjectFile.onchange=()=>{const file=importProjectFile.files?.[0];if(file)importProjectFromFile(file)};
 
-function resize(){const w=viewer.clientWidth,h=viewer.clientHeight;camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h,false)}window.addEventListener('resize',resize);
-function animate(){requestAnimationFrame(animate);controls.update();renderer.render(scene,camera)}
-function esc(v=''){return String(v).replace(/[&<>'"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]))}
+els.listFilter.onchange = () => { state.listFilter = els.listFilter.value; saveWorking(); refreshUI(); };
+$('planToggleBtn').onclick = () => { state.showPlan = !state.showPlan; if(floorPlane) floorPlane.material.opacity = state.showPlan ? 1 : 0.12; saveWorking(); refreshUI(); };
+$('view3dBtn').onclick = () => { camera.position.set(0,72,86); controls.target.set(0,0,0); controls.update(); };
+$('topViewBtn').onclick = () => { camera.position.set(0,130,0.01); controls.target.set(0,0,0); controls.update(); };
+$('resetViewBtn').onclick = resetView;
+function resetView(){ camera.position.set(0,72,86); controls.target.set(0,0,0); controls.update(); }
+floorTabs.forEach(btn => btn.onclick = () => switchFloor(btn.dataset.floor));
+function switchFloor(floor){ state.floor = floor; draftWall = { points: [], mousePoint: null }; dragState = null; buildFloor(); renderObjects(); refreshUI(); saveWorking(); resetView(); }
 
-buildFloor();renderModules();renderCameras();updateAddButtons();renderStorage();resize();animate();
+function getStore(){
+  try{ const raw = localStorage.getItem(STORE_KEY) || PREV_STORE_KEYS.map(k => localStorage.getItem(k)).find(Boolean); return JSON.parse(raw) || { folders:[{id:'root',name:'我的專案'}], projects:[] }; }
+  catch{ return { folders:[{id:'root',name:'我的專案'}], projects:[] }; }
+}
+function setStore(store){ localStorage.setItem(STORE_KEY, JSON.stringify(store)); }
+function ensureStore(){ const s = getStore(); if(!s.folders?.length) s.folders = [{id:'root',name:'我的專案'}]; if(!s.projects) s.projects = []; setStore(s); return s; }
+function renderStore(){
+  const s = ensureStore();
+  const current = els.projectFolder.value && s.folders.some(f => f.id === els.projectFolder.value) ? els.projectFolder.value : s.folders[0].id;
+  els.projectFolder.innerHTML = s.folders.map(f => `<option value="${esc(f.id)}">${esc(f.name)}</option>`).join('');
+  els.projectFolder.value = current;
+  const list = s.projects.filter(p => p.folderId === current).sort((a,b) => b.updatedAt - a.updatedAt);
+  els.savedCount.textContent = `${list.length} 筆`;
+  if(!list.length){ els.projectList.innerHTML = '<div class="empty-list">此資料夾尚無儲存專案</div>'; return; }
+  els.projectList.innerHTML = list.map(p => `<div class="item"><div><strong>${esc(p.name)}</strong><small>${new Date(p.updatedAt).toLocaleString()}・${esc(p.version || '')}</small></div><div class="project-actions"><button data-act="load" data-id="${esc(p.id)}">讀取</button><button data-act="delete" data-id="${esc(p.id)}">刪除</button></div></div>`).join('');
+  els.projectList.querySelectorAll('button').forEach(btn => btn.onclick = e => { e.stopPropagation(); btn.dataset.act === 'load' ? loadProject(btn.dataset.id) : deleteProject(btn.dataset.id); });
+}
+els.projectFolder.onchange = renderStore;
+$('newFolderBtn').onclick = () => { const name = prompt('輸入新資料夾名稱：'); if(!name?.trim()) return; const s = ensureStore(); const folder = { id: uid('folder'), name: name.trim() }; s.folders.push(folder); setStore(s); renderStore(); els.projectFolder.value = folder.id; renderStore(); };
+$('deleteFolderBtn').onclick = () => { const s = ensureStore(); const id = els.projectFolder.value; if(id === 'root'){ alert('「我的專案」為預設資料夾，不能刪除。'); return; } const folder = s.folders.find(f => f.id === id); if(!folder) return; const count = s.projects.filter(p => p.folderId === id).length; if(!confirm(`刪除資料夾「${folder.name}」？${count ? `\n裡面的 ${count} 個專案也會一起刪除。` : ''}`)) return; s.folders = s.folders.filter(f => f.id !== id); s.projects = s.projects.filter(p => p.folderId !== id); setStore(s); renderStore(); };
+$('saveProjectBtn').onclick = () => { const name = els.projectName.value.trim(); if(!name){ alert('請先輸入專案名稱。'); return; } const s = ensureStore(); const folderId = els.projectFolder.value; const payload = buildProjectPayload(); let p = s.projects.find(x => x.folderId === folderId && x.name === name); if(p){ p.data = payload; p.updatedAt = Date.now(); p.version = APP_VERSION; } else { s.projects.push({ id: uid('project'), folderId, name, data: payload, updatedAt: Date.now(), version: APP_VERSION }); } setStore(s); renderStore(); els.statusText.textContent = `已儲存：${name}｜${APP_VERSION}`; };
+function buildProjectPayload(){ return { floor: state.floor, showPlan: state.showPlan, listFilter: state.listFilter, cameras: deepCopy(state.cameras), modules: deepCopy(state.modules) }; }
+function applyProjectPayload(payload){ state.floor = payload.floor || 'B1'; state.showPlan = payload.showPlan !== false; state.listFilter = payload.listFilter || 'camera'; state.cameras = sanitizeCameras(payload.cameras); state.modules = sanitizeModules(payload.modules); clearSelection(); saveWorking(); buildFloor(); renderObjects(); refreshUI(); resetView(); }
+function loadProject(id){ const s = ensureStore(); const p = s.projects.find(x => x.id === id); if(!p) return; if(!confirm(`讀取「${p.name}」？目前未儲存的變更會被取代。`)) return; els.projectName.value = p.name; applyProjectPayload(p.data); els.statusText.textContent = `已讀取：${p.name}｜${p.version || APP_VERSION}`; }
+function deleteProject(id){ const s = ensureStore(); const p = s.projects.find(x => x.id === id); if(!p) return; if(!confirm(`確定刪除專案「${p.name}」？`)) return; s.projects = s.projects.filter(x => x.id !== id); setStore(s); renderStore(); }
+$('exportProjectBtn').onclick = async () => {
+  const name = els.projectName.value.trim() || `CCTV專案-${new Date().toISOString().slice(0,10)}`;
+  const payload = { format: 'UTOP-CCTV-3D-PROJECT', schemaVersion: 2, appVersion: APP_VERSION, company: '昱拓弱電有限公司', name, exportedAt: new Date().toISOString(), data: buildProjectPayload() };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const filename = `${name}.utop3d`;
+  if(window.showSaveFilePicker){
+    try{
+      const handle = await window.showSaveFilePicker({ suggestedName: filename, types:[{ description:'UTOP 3D Project', accept:{ 'application/json':['.utop3d','.json'] } }] });
+      const writable = await handle.createWritable(); await writable.write(blob); await writable.close(); els.statusText.textContent = `已匯出：${filename}`; return;
+    }catch(err){ if(err?.name !== 'AbortError') console.warn(err); }
+  }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click(); URL.revokeObjectURL(a.href); els.statusText.textContent = `已下載：${filename}`;
+};
+$('importProjectBtn').onclick = () => $('importProjectFile').click();
+$('importProjectFile').onchange = async e => {
+  const file = e.target.files?.[0]; if(!file) return; try{ const text = await file.text(); const json = JSON.parse(text); const payload = json.data ? json.data : json; applyProjectPayload(payload); els.projectName.value = json.name || file.name.replace(/\.(utop3d|json)$/i, ''); els.statusText.textContent = `已匯入：${file.name}`; }catch(err){ alert('匯入失敗，檔案格式不正確。'); console.warn(err); } e.target.value = '';
+};
+
+function resize(){ const w = els.viewer.clientWidth, h = els.viewer.clientHeight; camera.aspect = w / h; camera.updateProjectionMatrix(); renderer.setSize(w, h, false); }
+window.addEventListener('resize', resize);
+function animate(){ requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
+
+buildFloor(); renderObjects(); refreshUI(); renderStore(); resize(); animate();
