@@ -12,6 +12,7 @@ const cameraForm = document.getElementById('cameraForm');
 const addHint = document.getElementById('addHint');
 const selectedFov = document.getElementById('selectedFov');
 const selectedRange = document.getElementById('selectedRange');
+const statusText = document.getElementById('statusText');
 
 const inputs = {
   name: document.getElementById('camName'),
@@ -44,7 +45,7 @@ controls.minDistance = 28;
 controls.maxDistance = 180;
 
 scene.add(new THREE.HemisphereLight(0xccecff, 0x1a2734, 1.8));
-const key = new THREE.DirectionalLight(0xffffff, 1.5); key.position.set(20,50,30); scene.add(key);
+const key = new THREE.DirectionalLight(0xffffff, 1.4); key.position.set(20,50,30); scene.add(key);
 
 const floorRoot = new THREE.Group(); scene.add(floorRoot);
 const cameraRoot = new THREE.Group(); scene.add(cameraRoot);
@@ -63,45 +64,85 @@ const state = {
   showPlan:true,
   cameras: JSON.parse(localStorage.getItem('cctv3d-cameras-v1') || '{"B1":[],"B2":[]}')
 };
-if(!state.cameras.B1) state.cameras.B1=[]; if(!state.cameras.B2) state.cameras.B2=[];
+if(!state.cameras.B1) state.cameras.B1=[];
+if(!state.cameras.B2) state.cameras.B2=[];
 
 let floorPlane = null;
 const floorWidth = 100, floorDepth = 78.26;
 const PLAN_W = 2530, PLAN_H = 1980;
 
+// 依平面圖重新校正後的主要牆線資料（V1.2）
 const wallPresets = {
   B1: {
     footprint: [
       [92,316],[1576,316],[1846,520],[1911,1197],[2281,1197],[2281,1810],[90,1810],[90,316]
     ],
     rects: [
-      [339,544,555,846],      // 左上核心區
-      [93,1041,518,1220],     // 左中設備房
-      [254,1427,760,1527],    // 左下電梯/設備區
-      [1578,518,1848,640],    // 右上房間群
-      [1580,1386,1768,1608],  // 右中電梯/樓梯核心
-      [1580,1608,1710,1810]   // 右下電氣室
+      [337,544,555,748],    // 左上車位區核心
+      [336,747,609,1043],   // 左上垃圾儲存區外框
+      [610,1042,675,1220],  // 左上 FSD1 豎井
+      [337,1042,1030,1220], // 發電機室
+      [337,1418,1158,1528], // 左下電梯/機房長條區
+      [1578,519,1848,722],  // 右上台電室/受電室主體
+      [1579,721,1847,783],  // 右上受電箱室前緣
+      [1583,1376,1896,1578],// 右中梯廳/機電核心外框
+      [1493,1607,1706,1810] // 右下電信室
     ],
     polylines: [
-      // 左上車道弧牆與坡道核心，以折線近似
-      [[92,317],[244,450],[336,546]],
-      [[92,1043],[218,1043],[336,845]],
-      [[336,546],[336,845]],
-      // 中上大車道虛擬核心外牆（對齊圖面主要牆線）
-      [[1576,316],[1576,518]],
-      [[1846,520],[1846,640]],
-      // 右側凸出車位區
-      [[1911,1197],[2281,1197],[2281,1810]],
-      // 左下設備房開門前緣
-      [[518,1120],[612,1120],[612,1220]],
-      // 中下偏右機房
-      [[1710,1608],[1768,1608],[1768,1810]],
+      // 外圍補強
+      [[92,316],[338,545]],
+      [[92,1043],[338,1043]],
+      [[92,1810],[2281,1810]],
+      [[1911,1197],[2281,1197]],
+
+      // 左上曲線核心與連接牆（以折線近似）
+      [[338,545],[338,747]],
+      [[555,545],[555,747]],
+      [[338,747],[338,1043]],
+      [[609,747],[609,905],[585,960],[545,1002],[490,1030],[432,1043],[338,1043]],
+      [[555,747],[609,747]],
+      [[610,1042],[610,1220]],
+      [[675,1042],[675,1220]],
+      [[675,1042],[1030,1042]],
+      [[1030,1042],[1030,1220]],
+      [[337,1220],[337,1528]],
+      [[1158,1418],[1158,1528]],
+
+      // 左下設備/梯間補線
+      [[337,1418],[337,1528]],
+      [[1030,1220],[1030,1418]],
+      [[1030,1418],[1158,1418]],
+      [[730,1220],[730,1318],[1030,1318]],
+
+      // 右上斜房間與底邊
+      [[1578,519],[1578,722]],
+      [[1578,722],[1847,722]],
+      [[1847,520],[1847,722]],
+      [[1579,783],[1847,783]],
+
+      // 右中梯廳/機房細分
+      [[1583,1376],[1583,1578]],
+      [[1715,1376],[1715,1578]],
+      [[1788,1376],[1788,1578]],
+      [[1896,1376],[1896,1578]],
+      [[1583,1515],[1715,1515]],
+      [[1788,1515],[1896,1515]],
+      [[1493,1607],[1493,1810]],
+      [[1706,1607],[1706,1810]],
+      [[1706,1607],[1812,1607]],
+      [[1812,1607],[1812,1810]],
+
+      // 中下 83~88 車位左側牆與右側室內牆對齊感
+      [[1412,1376],[1412,1810]],
+      [[1412,1528],[1583,1528]],
+      [[1412,1220],[1412,1376]],
     ],
     columns: [
       [337,544],[808,319],[1412,319],[1591,318],[1848,542],[1910,1197],[2201,1810],
       [807,847],[1096,847],[1412,847],[1592,847],[1767,847],
       [774,1197],[1410,1197],[1766,1197],[2026,1347],
-      [338,1418],[776,1527],[1592,1526],[1910,1526]
+      [338,1418],[776,1527],[1592,1526],[1910,1526],
+      [338,747],[610,1042],[1030,1220],[1158,1418],[1412,1528]
     ]
   },
   B2: {
@@ -109,32 +150,71 @@ const wallPresets = {
       [92,316],[1576,316],[1846,519],[1911,1197],[2281,1197],[2281,1810],[90,1810],[90,316]
     ],
     rects: [
-      [197,317,336,521],      // 左上機房
-      [339,543,557,845],      // 左上核心區
-      [1578,519,1848,721],    // 右上房間群
-      [92,1041,521,1220],     // 左中房間群
-      [252,1427,760,1527],    // 左下電梯/設備區
-      [906,1513,1090,1642],   // 中下水池/設備區
-      [1580,1386,1768,1608],  // 右中電梯/樓梯核心
-      [1580,1608,1768,1810]   // 右下設備室
+      [199,317,338,520],    // 左上機房
+      [338,544,557,845],    // 左上車位群 / 坡道核心
+      [338,1042,520,1220],  // 左中排煙機房區
+      [521,1042,760,1220],  // 左中可售車位群/房間區
+      [338,1418,765,1528],  // 左下電梯/設備區
+      [906,1526,1088,1643], // 綠美化水槽/設備室
+      [1578,519,1848,722],  // 右上機房群主體
+      [1583,1376,1896,1578],// 右中梯廳/機電核心外框
+      [1583,1607,1896,1810] // 右下設備室群
     ],
     polylines: [
-      [[92,317],[228,433],[339,544]],
-      [[92,1041],[223,1041],[339,845]],
-      [[339,544],[339,845]],
+      // 外圍補強
+      [[92,316],[338,545]],
+      [[92,1042],[338,1042]],
+      [[92,1810],[2281,1810]],
+      [[1911,1197],[2281,1197]],
+
+      // 左上坡道核心
+      [[199,317],[338,317]],
+      [[338,317],[338,520]],
+      [[199,520],[338,520]],
+      [[338,544],[338,845]],
+      [[557,544],[557,845]],
+      [[338,845],[520,845]],
+      [[520,845],[557,845]],
+      [[338,1042],[520,1042]],
+      [[520,1042],[760,1042]],
+      [[520,1220],[760,1220]],
+      [[760,1042],[760,1220]],
+      [[338,1220],[338,1528]],
+      [[765,1418],[765,1528]],
+
+      // 左下設備與中下水槽區
+      [[338,1418],[338,1528]],
+      [[765,1418],[906,1418]],
+      [[906,1418],[906,1643]],
+      [[1088,1526],[1088,1643]],
+      [[906,1643],[1088,1643]],
+
+      // 右上房間分隔
+      [[1578,519],[1578,722]],
+      [[1848,519],[1848,722]],
       [[1578,563],[1848,563]],
       [[1578,640],[1848,640]],
-      [[521,1041],[612,1041],[612,1220]],
-      [[760,1527],[906,1527]],
-      [[1090,1527],[1410,1527]],
-      [[1710,1608],[1768,1608],[1768,1810]],
-      [[1911,1197],[2281,1197],[2281,1810]]
+      [[1578,722],[1848,722]],
+
+      // 右中梯廳/設備群
+      [[1583,1376],[1583,1578]],
+      [[1715,1376],[1715,1578]],
+      [[1788,1376],[1788,1578]],
+      [[1896,1376],[1896,1578]],
+      [[1583,1515],[1715,1515]],
+      [[1788,1515],[1896,1515]],
+      [[1583,1607],[1583,1810]],
+      [[1712,1607],[1712,1810]],
+      [[1896,1607],[1896,1810]],
+      [[1410,1528],[1583,1528]],
+      [[1410,1376],[1410,1810]]
     ],
     columns: [
       [337,545],[808,319],[1412,319],[1591,318],[1848,541],[1910,1197],[2201,1810],
       [808,846],[1096,847],[1412,847],[1592,847],[1767,847],
       [774,1197],[1410,1197],[1766,1197],[2026,1347],
-      [338,1418],[776,1527],[1592,1526],[1910,1526]
+      [338,1418],[776,1527],[1592,1526],[1910,1526],
+      [338,845],[520,1042],[760,1220],[906,1643]
     ]
   }
 };
@@ -159,7 +239,7 @@ function imgToWorld([x,y]){
   ];
 }
 
-function makeWall(a,b,height=3.4,thickness=.45,color=0x6f8799,opacity=.88){
+function makeWall(a,b,height=3.35,thickness=.28,color=0x6f8799,opacity=.86){
   const dx=b[0]-a[0], dz=b[1]-a[1], len=Math.hypot(dx,dz);
   const geo=new THREE.BoxGeometry(len,height,thickness);
   const mat=new THREE.MeshStandardMaterial({color,roughness:.78,metalness:.05,transparent:true,opacity});
@@ -169,15 +249,15 @@ function makeWall(a,b,height=3.4,thickness=.45,color=0x6f8799,opacity=.88){
   return m;
 }
 
-function makeColumn(x,z,size=.82,height=3.35){
+function makeColumn(x,z,size=.72,height=3.25){
   const geo = new THREE.BoxGeometry(size,height,size);
-  const mat = new THREE.MeshStandardMaterial({color:0x90a4b4,roughness:.72,metalness:.04,transparent:true,opacity:.92});
+  const mat = new THREE.MeshStandardMaterial({color:0x96a9b8,roughness:.72,metalness:.04,transparent:true,opacity:.9});
   const col = new THREE.Mesh(geo,mat);
   col.position.set(x,height/2,z);
   return col;
 }
 
-function addPolylineWalls(group, pts, {height=3.2, thickness=.38, color=0x768ca0, opacity=.9, closed=false}={}){
+function addPolylineWalls(group, pts, {height=3.2, thickness=.24, color=0x768ca0, opacity=.88, closed=false}={}){
   for(let i=0;i<pts.length-1;i++){
     const a = imgToWorld(pts[i]);
     const b = imgToWorld(pts[i+1]);
@@ -190,7 +270,7 @@ function addPolylineWalls(group, pts, {height=3.2, thickness=.38, color=0x768ca0
   }
 }
 
-function addRectWalls(group, [x1,y1,x2,y2], {height=3.0, thickness=.34, color=0x7f95a7, opacity=.9}={}){
+function addRectWalls(group, [x1,y1,x2,y2], {height=3.0, thickness=.22, color=0x7f95a7, opacity=.88}={}){
   const pts = [[x1,y1],[x2,y1],[x2,y2],[x1,y2],[x1,y1]];
   addPolylineWalls(group, pts, {height, thickness, color, opacity});
 }
@@ -200,31 +280,27 @@ function buildWalls(){
   group.name = 'walls';
   const preset = wallPresets[state.floor];
 
-  // 外牆
   addPolylineWalls(group, preset.footprint, {
-    height: 3.6,
-    thickness: 0.52,
+    height: 3.55,
+    thickness: 0.34,
     color: 0x5f7890,
-    opacity: 0.95
+    opacity: 0.94
   });
 
-  // 內牆 / 設備房
   preset.rects.forEach(rect => addRectWalls(group, rect, {
-    height: 3.05,
-    thickness: 0.34,
-    color: 0x73879a,
-    opacity: 0.92
+    height: 3.02,
+    thickness: 0.22,
+    color: 0x768a9d,
+    opacity: 0.9
   }));
 
-  // 特殊斜牆 / 分隔牆
   preset.polylines.forEach(poly => addPolylineWalls(group, poly, {
-    height: 3.05,
-    thickness: 0.32,
+    height: 3.02,
+    thickness: 0.2,
     color: 0x70879a,
-    opacity: 0.92
+    opacity: 0.9
   }));
 
-  // 柱位（加強與平面圖對齊感）
   const colGroup = new THREE.Group();
   colGroup.name = 'columns';
   preset.columns.forEach(pt => {
@@ -317,7 +393,17 @@ renderer.domElement.addEventListener('pointerdown',e=>{
   state.cameras[state.floor].push(c); state.selectedId=c.id; state.adding=false; controls.enabled=true; addHint.classList.add('hidden'); document.getElementById('addCameraBtn').textContent='＋ 新增鏡頭'; save(); renderCameras();
 });
 
-function switchFloor(floor){state.floor=floor;state.selectedId=null;floorTabs.forEach(b=>b.classList.toggle('active',b.dataset.floor===floor));floorTitle.textContent=floorData[floor].title;floorChip.textContent=floor;buildFloor();renderCameras();resetView();}
+function switchFloor(floor){
+  state.floor=floor;
+  state.selectedId=null;
+  floorTabs.forEach(b=>b.classList.toggle('active',b.dataset.floor===floor));
+  floorTitle.textContent=floorData[floor].title;
+  floorChip.textContent=floor;
+  buildFloor();
+  renderCameras();
+  resetView();
+  statusText.textContent = `${floor} 模型已載入`;
+}
 floorTabs.forEach(b=>b.addEventListener('click',()=>switchFloor(b.dataset.floor)));
 
 function resetView(){camera.position.set(0,72,86);controls.target.set(0,0,0);controls.update();}
