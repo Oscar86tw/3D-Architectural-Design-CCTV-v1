@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-const APP_VERSION = 'V1.45';
+const APP_VERSION = 'V1.46';
 const DEFAULT_COMMUNITY_ID = 'hualong-chao-plus';
-const CATALOG_KEY = 'cctv3d-site-catalog-v1-45';
-const WORKING_KEY = 'cctv3d-working-v1-45';
-const STORE_KEY = 'cctv3d-project-store-v1-45';
-const PREV_STORE_KEYS = ['cctv3d-project-store-v1-44','cctv3d-project-store-v1-43','cctv3d-project-store-v1-42','cctv3d-project-store-v1-41','cctv3d-project-store-v1-23','cctv3d-project-store-v1-22','cctv3d-project-store-v1-21','cctv3d-project-store-v1-20','cctv3d-project-store-v1-19','cctv3d-project-store-v1-18','cctv3d-project-store-v1-17','cctv3d-project-store-v1-16','cctv3d-project-store-v1-15','cctv3d-project-store-v1-14','cctv3d-project-store-v1-13','cctv3d-project-store-v1-12','cctv3d-project-store-v1-11','cctv3d-project-store-v1-10','cctv3d-project-store-v1-9','cctv3d-project-store-v1-8','cctv3d-project-store-v1-7','cctv3d-project-store-v1-6'];
+const CATALOG_KEY = 'cctv3d-site-catalog-v1-46';
+const WORKING_KEY = 'cctv3d-working-v1-46';
+const STORE_KEY = 'cctv3d-project-store-v1-46';
+const PREV_STORE_KEYS = ['cctv3d-project-store-v1-45','cctv3d-project-store-v1-44','cctv3d-project-store-v1-43','cctv3d-project-store-v1-42','cctv3d-project-store-v1-41','cctv3d-project-store-v1-23','cctv3d-project-store-v1-22','cctv3d-project-store-v1-21','cctv3d-project-store-v1-20','cctv3d-project-store-v1-19','cctv3d-project-store-v1-18','cctv3d-project-store-v1-17','cctv3d-project-store-v1-16','cctv3d-project-store-v1-15','cctv3d-project-store-v1-14','cctv3d-project-store-v1-13','cctv3d-project-store-v1-12','cctv3d-project-store-v1-11','cctv3d-project-store-v1-10','cctv3d-project-store-v1-9','cctv3d-project-store-v1-8','cctv3d-project-store-v1-7','cctv3d-project-store-v1-6'];
 const GOOGLE_DRIVE_PROJECT_URL = 'https://drive.google.com/drive/folders/1FWduBvqlTmr1oTipmqR3sywO2VUCFq9i?usp=drive_link';
 const GOOGLE_SHEET_PROJECT_URL = 'https://docs.google.com/spreadsheets/d/1-jy-MWBXMyx92xZ-RTnwqpB-j7cMnlOIB2i1lh2eUZg/edit?usp=sharing';
 const GOOGLE_SHEET_ID = '1-jy-MWBXMyx92xZ-RTnwqpB-j7cMnlOIB2i1lh2eUZg';
@@ -747,6 +747,9 @@ function jsonpApiGet(action,params={},options={}){
       const base=await getApiUrlFromSheet();
       const callback=`__cctvJsonp_${Date.now()}_${++jsonpSeq}`;
       const u=new URL(base);
+      // B1 應是純 /exec；若曾手動測試而殘留 action/callback，呼叫前先清掉。
+      u.searchParams.delete('action');
+      u.searchParams.delete('callback');
       u.searchParams.set('action',action);
       u.searchParams.set('callback',callback);
       Object.entries(params||{}).forEach(([k,v])=>{
@@ -805,6 +808,16 @@ async function apiGet(action,params={},options={}){
   return await jsonpApiGet(action,params,options);
 }
 
+async function pingApi(){
+  try{
+    return await apiGet('ping',{}, {timeoutMs:20000});
+  }catch(firstErr){
+    console.warn('第一次 ping 未完成，進行一次冷啟動重試：',firstErr);
+    await sleep(800);
+    return await apiGet('ping',{retry:1}, {timeoutMs:30000});
+  }
+}
+
 async function apiPost(body){
   const base=await getApiUrlFromSheet();
   const frameName=`cctvPostFrame_${Date.now()}_${Math.random().toString(36).slice(2)}`;
@@ -854,7 +867,7 @@ async function pollCloud(getter,predicate,{timeout=30000,interval=1000,label='�
 }
 
 async function readCloudProjectsRaw(){
-  const data=await apiGet('listProjects');
+  const data=await apiGet('listProjects',{}, {timeoutMs:30000});
   if(!data?.ok)throw new Error(data?.message||'讀取雲端專案清單失敗');
   return Array.isArray(data.projects)?data.projects:[];
 }
@@ -976,11 +989,11 @@ async function refreshCloudProjects(forceApi=false){
     setCloudStatus(false,'API 來源：工作表1!B1｜連線中…');
     setStartupStep('ping','loading','正在測試 Apps Script API…');
 
-    const ping=await apiGet('ping');
+    const ping=await pingApi();
     if(!ping?.ok) throw new Error(ping?.message||'API ping 失敗');
 
     const apiVersion=String(ping.apiVersion||'舊版');
-    if(ping.storage!=='Google Drive' || !ping.driveRootFolderId){
+    if(ping.storage!=='Google Drive'){
       throw new Error(`目前 /exec 仍不是 Google Drive 雲端版 API（API ${apiVersion}）`);
     }
     setStartupStep('ping','done',`Apps Script API 連線正常｜Drive API ${apiVersion}`);
@@ -992,7 +1005,7 @@ async function refreshCloudProjects(forceApi=false){
 
     let folderMode='normal';
     try{
-      const folderData=await apiGet('listFolders');
+      const folderData=await apiGet('listFolders',{}, {timeoutMs:30000});
       if(folderData?.ok){
         cloudFolders=Array.isArray(folderData.folders)?folderData.folders:[];
       }else{
