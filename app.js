@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-const APP_VERSION = 'V1.43';
+const APP_VERSION = 'V1.44';
 const DEFAULT_COMMUNITY_ID = 'hualong-chao-plus';
-const CATALOG_KEY = 'cctv3d-site-catalog-v1-43';
-const WORKING_KEY = 'cctv3d-working-v1-43';
-const STORE_KEY = 'cctv3d-project-store-v1-43';
-const PREV_STORE_KEYS = ['cctv3d-project-store-v1-42','cctv3d-project-store-v1-41','cctv3d-project-store-v1-23','cctv3d-project-store-v1-22','cctv3d-project-store-v1-21','cctv3d-project-store-v1-20','cctv3d-project-store-v1-19','cctv3d-project-store-v1-18','cctv3d-project-store-v1-17','cctv3d-project-store-v1-16','cctv3d-project-store-v1-15','cctv3d-project-store-v1-14','cctv3d-project-store-v1-13','cctv3d-project-store-v1-12','cctv3d-project-store-v1-11','cctv3d-project-store-v1-10','cctv3d-project-store-v1-9','cctv3d-project-store-v1-8','cctv3d-project-store-v1-7','cctv3d-project-store-v1-6'];
+const CATALOG_KEY = 'cctv3d-site-catalog-v1-44';
+const WORKING_KEY = 'cctv3d-working-v1-44';
+const STORE_KEY = 'cctv3d-project-store-v1-44';
+const PREV_STORE_KEYS = ['cctv3d-project-store-v1-43','cctv3d-project-store-v1-42','cctv3d-project-store-v1-41','cctv3d-project-store-v1-23','cctv3d-project-store-v1-22','cctv3d-project-store-v1-21','cctv3d-project-store-v1-20','cctv3d-project-store-v1-19','cctv3d-project-store-v1-18','cctv3d-project-store-v1-17','cctv3d-project-store-v1-16','cctv3d-project-store-v1-15','cctv3d-project-store-v1-14','cctv3d-project-store-v1-13','cctv3d-project-store-v1-12','cctv3d-project-store-v1-11','cctv3d-project-store-v1-10','cctv3d-project-store-v1-9','cctv3d-project-store-v1-8','cctv3d-project-store-v1-7','cctv3d-project-store-v1-6'];
 const GOOGLE_DRIVE_PROJECT_URL = 'https://drive.google.com/drive/folders/1FWduBvqlTmr1oTipmqR3sywO2VUCFq9i?usp=drive_link';
 const GOOGLE_SHEET_PROJECT_URL = 'https://docs.google.com/spreadsheets/d/1-jy-MWBXMyx92xZ-RTnwqpB-j7cMnlOIB2i1lh2eUZg/edit?usp=sharing';
 const GOOGLE_SHEET_ID = '1-jy-MWBXMyx92xZ-RTnwqpB-j7cMnlOIB2i1lh2eUZg';
@@ -733,7 +733,7 @@ async function getApiUrlFromSheet(force=false){
 
 let jsonpSeq=0;
 
-function jsonpApiGet(action,params={}){
+function jsonpApiGet(action,params={},options={}){
   return new Promise(async(resolve,reject)=>{
     try{
       const base=await getApiUrlFromSheet();
@@ -765,10 +765,11 @@ function jsonpApiGet(action,params={}){
         reject(new Error(`JSONP API 載入失敗：${action}`));
       };
 
+      const timeoutMs=Number(options.timeoutMs||15000);
       const timer=setTimeout(()=>{
         cleanup();
-        reject(new Error(`JSONP API ${action} 逾時`));
-      },15000);
+        reject(new Error(`JSONP API ${action} 逾時（${Math.round(timeoutMs/1000)} 秒）`));
+      },timeoutMs);
 
       script.src=u.toString();
       document.head.appendChild(script);
@@ -778,8 +779,8 @@ function jsonpApiGet(action,params={}){
   });
 }
 
-async function apiGet(action,params={}){
-  return await jsonpApiGet(action,params);
+async function apiGet(action,params={},options={}){
+  return await jsonpApiGet(action,params,options);
 }
 
 async function apiPost(body){
@@ -842,6 +843,40 @@ async function readCloudFoldersRaw(){
   return Array.isArray(data.folders)?data.folders:[];
 }
 
+async function scanDriveProjectsRaw(){
+  const data=await apiGet('scanDriveProjects',{}, {timeoutMs:60000});
+  if(!data?.ok)throw new Error(data?.message||'掃描 Google Drive 專案失敗');
+  return Array.isArray(data.projects)?data.projects:[];
+}
+
+function mergeCloudProjectLists(indexed=[],scanned=[]){
+  const byDrive=new Map();
+  const byProject=new Map();
+
+  indexed.forEach(p=>{
+    if(p.driveFileId)byDrive.set(String(p.driveFileId),p);
+    if(p.projectId)byProject.set(String(p.projectId),p);
+  });
+
+  const out=[...indexed];
+  scanned.forEach(p=>{
+    const sameDrive=p.driveFileId?byDrive.get(String(p.driveFileId)):null;
+    const sameProject=p.projectId?byProject.get(String(p.projectId)):null;
+    if(sameDrive||sameProject){
+      const target=sameDrive||sameProject;
+      target.driveFileId=p.driveFileId||target.driveFileId;
+      target.driveFileUrl=p.driveFileUrl||target.driveFileUrl;
+      target.driveFileExists=true;
+      if(!target.projectName)target.projectName=p.projectName;
+      if(!target.folder)target.folder=p.folder;
+      if(!target.updatedAt)target.updatedAt=p.updatedAt;
+    }else{
+      out.push(p);
+    }
+  });
+  return out;
+}
+
 function renderLocalProjects(){
   const s=ensureStore(),fid=els.localProjectFolder?.value||s.folders[0].id,list=s.projects.filter(p=>p.folderId===fid).sort((a,b)=>b.updatedAt-a.updatedAt);
   els.localSavedCount.textContent=`${list.length} 筆`;
@@ -880,7 +915,7 @@ async function refreshCloudProjects(forceApi=false){
     }
     setStartupStep('ping','done',`Apps Script API 連線正常｜Drive API ${apiVersion}`);
 
-    setStartupStep('cloud','loading','正在讀取 Google Sheets 雲端專案清單…');
+    setStartupStep('cloud','loading','正在讀取雲端專案索引…');
     const data=await apiGet('listProjects');
     if(!data?.ok) throw new Error(data?.message||'讀取專案清單失敗');
     cloudProjects=Array.isArray(data.projects)?data.projects:[];
@@ -926,6 +961,17 @@ async function refreshCloudProjects(forceApi=false){
     setCloudStatus(true,`API 來源：工作表1!B1｜連線正常｜${cloudProjects.length} 個雲端專案`);
     setStartupStep('cloud','done',`已載入 ${cloudProjects.length} 個雲端專案 / ${cloudFolders.length} 個資料夾`);
     renderCloudProjects();
+
+    // 若索引為空，背景掃描 B3 Drive 實體 .utop3d，不阻塞網站啟動。
+    if(cloudProjects.length===0){
+      scanDriveProjectsRaw().then(scanned=>{
+        if(scanned.length){
+          cloudProjects=mergeCloudProjectLists(cloudProjects,scanned);
+          renderCloudProjects();
+          setCloudStatus(true,`Drive 掃描完成｜找回 ${scanned.length} 個實體專案`);
+        }
+      }).catch(err=>console.warn('Drive 背景掃描未完成：',err));
+    }
   }catch(err){
     console.warn(err);
     setStartupStep('ping','error',err.message);
@@ -937,6 +983,25 @@ async function refreshCloudProjects(forceApi=false){
   }
 }
 function renderStore(){renderFolderOptions();renderCloudFolderOptions();renderLocalProjects();renderCloudProjects();}
+
+async function refreshCloudWithDriveScan(){
+  const btn=$('refreshCloudBtn');
+  if(btn){btn.disabled=true;btn.textContent='掃描中…';}
+  try{
+    els.statusText.textContent='正在重新整理雲端索引並掃描 Google Drive…';
+    await refreshCloudProjects(true);
+    const scanned=await scanDriveProjectsRaw();
+    cloudProjects=mergeCloudProjectLists(cloudProjects,scanned);
+    renderCloudProjects();
+    setCloudStatus(true,`重新整理完成｜索引 ${cloudProjects.length} 筆｜Drive 掃描 ${scanned.length} 筆`);
+    els.statusText.textContent=`雲端重新整理完成｜Drive 掃描 ${scanned.length} 筆`;
+  }catch(err){
+    showErrorModal('雲端重新整理失敗',err,'Google Drive / scanDriveProjects');
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='重新整理';}
+  }
+}
+if($('refreshCloudBtn'))$('refreshCloudBtn').onclick=refreshCloudWithDriveScan;
 
 // 專案儲存浮動視窗
 function openProjectStorage(){els.projectStorageModal.classList.remove('hidden');renderStore();}
