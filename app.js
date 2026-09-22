@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-const APP_VERSION = 'V1.44';
+const APP_VERSION = 'V1.45';
 const DEFAULT_COMMUNITY_ID = 'hualong-chao-plus';
-const CATALOG_KEY = 'cctv3d-site-catalog-v1-44';
-const WORKING_KEY = 'cctv3d-working-v1-44';
-const STORE_KEY = 'cctv3d-project-store-v1-44';
-const PREV_STORE_KEYS = ['cctv3d-project-store-v1-43','cctv3d-project-store-v1-42','cctv3d-project-store-v1-41','cctv3d-project-store-v1-23','cctv3d-project-store-v1-22','cctv3d-project-store-v1-21','cctv3d-project-store-v1-20','cctv3d-project-store-v1-19','cctv3d-project-store-v1-18','cctv3d-project-store-v1-17','cctv3d-project-store-v1-16','cctv3d-project-store-v1-15','cctv3d-project-store-v1-14','cctv3d-project-store-v1-13','cctv3d-project-store-v1-12','cctv3d-project-store-v1-11','cctv3d-project-store-v1-10','cctv3d-project-store-v1-9','cctv3d-project-store-v1-8','cctv3d-project-store-v1-7','cctv3d-project-store-v1-6'];
+const CATALOG_KEY = 'cctv3d-site-catalog-v1-45';
+const WORKING_KEY = 'cctv3d-working-v1-45';
+const STORE_KEY = 'cctv3d-project-store-v1-45';
+const PREV_STORE_KEYS = ['cctv3d-project-store-v1-44','cctv3d-project-store-v1-43','cctv3d-project-store-v1-42','cctv3d-project-store-v1-41','cctv3d-project-store-v1-23','cctv3d-project-store-v1-22','cctv3d-project-store-v1-21','cctv3d-project-store-v1-20','cctv3d-project-store-v1-19','cctv3d-project-store-v1-18','cctv3d-project-store-v1-17','cctv3d-project-store-v1-16','cctv3d-project-store-v1-15','cctv3d-project-store-v1-14','cctv3d-project-store-v1-13','cctv3d-project-store-v1-12','cctv3d-project-store-v1-11','cctv3d-project-store-v1-10','cctv3d-project-store-v1-9','cctv3d-project-store-v1-8','cctv3d-project-store-v1-7','cctv3d-project-store-v1-6'];
 const GOOGLE_DRIVE_PROJECT_URL = 'https://drive.google.com/drive/folders/1FWduBvqlTmr1oTipmqR3sywO2VUCFq9i?usp=drive_link';
 const GOOGLE_SHEET_PROJECT_URL = 'https://docs.google.com/spreadsheets/d/1-jy-MWBXMyx92xZ-RTnwqpB-j7cMnlOIB2i1lh2eUZg/edit?usp=sharing';
 const GOOGLE_SHEET_ID = '1-jy-MWBXMyx92xZ-RTnwqpB-j7cMnlOIB2i1lh2eUZg';
@@ -151,6 +151,14 @@ els.errorModalCopy.onclick=async()=>{
 };
 
 window.addEventListener('error',e=>{
+  const msg=String(e?.message||'');
+  const file=String(e?.filename||'');
+  // JSONP 跨網域腳本若在逾時後才回來，瀏覽器可能只暴露 generic「Script error.」。
+  // 這不是主程式錯誤，真正的 API 錯誤會由 jsonpApiGet 顯示，因此避免重複彈出未知檔案:0:0。
+  if(msg==='Script error.' && !file && !e?.lineno && !e?.colno){
+    console.warn('忽略跨網域 JSONP 延遲回應的 generic Script error');
+    return;
+  }
   showErrorModal(
     '網頁執行錯誤',
     e.error||e.message,
@@ -747,27 +755,41 @@ function jsonpApiGet(action,params={},options={}){
 
       const script=document.createElement('script');
       let done=false;
-      const cleanup=()=>{
+      let timer=null;
+
+      const removeCallbackLater=()=>{
+        // Apps Script 即使超過前端 timeout 仍可能稍後回傳。
+        // 保留 noop callback 一段時間，避免晚到的 JSONP 執行時產生跨網域 Script error。
+        window[callback]=()=>{};
+        setTimeout(()=>{
+          try{delete window[callback];}catch(_){window[callback]=undefined;}
+        },120000);
+      };
+
+      const cleanup=(timedOut=false)=>{
         if(done)return;
         done=true;
-        clearTimeout(timer);
-        try{delete window[callback];}catch(_){window[callback]=undefined;}
+        if(timer)clearTimeout(timer);
+        if(timedOut)removeCallbackLater();
+        else{
+          try{delete window[callback];}catch(_){window[callback]=undefined;}
+        }
         script.remove();
       };
 
       window[callback]=(data)=>{
-        cleanup();
+        cleanup(false);
         resolve(data);
       };
 
       script.onerror=()=>{
-        cleanup();
+        cleanup(false);
         reject(new Error(`JSONP API 載入失敗：${action}`));
       };
 
       const timeoutMs=Number(options.timeoutMs||15000);
-      const timer=setTimeout(()=>{
-        cleanup();
+      timer=setTimeout(()=>{
+        cleanup(true);
         reject(new Error(`JSONP API ${action} 逾時（${Math.round(timeoutMs/1000)} 秒）`));
       },timeoutMs);
 
@@ -847,6 +869,54 @@ async function scanDriveProjectsRaw(){
   const data=await apiGet('scanDriveProjects',{}, {timeoutMs:60000});
   if(!data?.ok)throw new Error(data?.message||'掃描 Google Drive 專案失敗');
   return Array.isArray(data.projects)?data.projects:[];
+}
+
+async function getProjectChunked(projectId){
+  const parts=[];
+  let offset=0;
+  const limit=100000;
+  const maxChunks=120;
+
+  for(let i=0;i<maxChunks;i++){
+    const r=await apiGet(
+      'getProjectChunk',
+      {projectId,offset,limit},
+      {timeoutMs:30000}
+    );
+
+    if(!r?.ok)throw new Error(r?.message||'分段讀取雲端案件失敗');
+    parts.push(String(r.chunk||''));
+    offset=Number(r.nextOffset||offset);
+
+    els.statusText.textContent=`正在分段讀取雲端案件… ${Math.min(100,Math.round((Number(r.progress||0))*100))}%`;
+
+    if(r.done){
+      const raw=parts.join('');
+      let wrapper;
+      try{wrapper=JSON.parse(raw);}
+      catch(err){throw new Error('雲端案件分段讀取完成，但 JSON 組合失敗：'+err.message);}
+
+      if(!wrapper || typeof wrapper!=='object')throw new Error('雲端案件格式錯誤');
+      return {
+        ok:true,
+        source:'Google Drive chunked',
+        project:{
+          projectId:String(wrapper.projectId||projectId),
+          community:wrapper.community||'',
+          floor:wrapper.floor||'',
+          projectName:wrapper.projectName||'未命名專案',
+          folder:wrapper.folder||'我的專案',
+          version:wrapper.appVersion||wrapper.version||'',
+          locked:!!wrapper.locked,
+          updatedAt:wrapper.savedAt||'',
+          driveFileId:wrapper.driveFileId||'',
+          data:wrapper.data||{}
+        }
+      };
+    }
+  }
+
+  throw new Error('雲端案件分段數量超過安全上限');
 }
 
 function mergeCloudProjectLists(indexed=[],scanned=[]){
@@ -1204,8 +1274,35 @@ $('newFolderBtn').onclick=async()=>{
 };
 function applyPayload(p){if(p.catalog?.communities?.length){catalog=p.catalog;saveCatalog();}state.communityId=p.communityId||catalog.communities[0].id;state.floor=p.floor||currentCommunity()?.floors[0]?.id||'';state.showPlan=p.showPlan!==false;state.listFilter=p.listFilter||'camera';state.cameras=migrateFlatData(p.cameras);state.modules=migrateFlatData(p.modules);state.calibrations=p.calibrations||{};state.selected={kind:'camera',id:null};saveWorking();buildFloor();renderObjects();refreshUI();resetView();}
 async function loadProjectCloud(id){
-  const meta=cloudProjects.find(x=>x.projectId===id);if(!meta)return;if(!confirm(`讀取「${meta.projectName}」？目前未儲存的變更會被取代。`))return;
-  try{const r=await apiGet('getProject',{projectId:id});if(!r?.ok||!r.project)throw new Error(r?.message||'讀取失敗');els.projectName.value=r.project.projectName||'';applyPayload(r.project.data||{});els.statusText.textContent=`已從雲端開啟：${r.project.projectName}｜${r.project.version||APP_VERSION}`;closeProjectStorage();}catch(err){showErrorModal('雲端讀取失敗',err,'讀取 Google Drive 專案');}
+  const meta=cloudProjects.find(x=>x.projectId===id);
+  if(!meta)return;
+  if(!confirm(`讀取「${meta.projectName}」？目前未儲存的變更會被取代。`))return;
+
+  try{
+    els.statusText.textContent=`正在讀取雲端案件：${meta.projectName}…`;
+
+    let r;
+    try{
+      // 正常案件先走快速單次讀取；V1.45 後端已避免載入整張大型備援 JSON 欄位。
+      r=await apiGet('getProject',{projectId:id},{timeoutMs:25000});
+    }catch(firstErr){
+      const msg=String(firstErr?.message||firstErr);
+      if(!msg.includes('逾時') && !msg.includes('載入失敗'))throw firstErr;
+
+      console.warn('單次 getProject 未完成，改用分段讀取：',firstErr);
+      els.statusText.textContent='單次讀取較慢，改用分段讀取 Google Drive 專案…';
+      r=await getProjectChunked(id);
+    }
+
+    if(!r?.ok||!r.project)throw new Error(r?.message||'讀取失敗');
+    els.projectName.value=r.project.projectName||meta.projectName||'';
+    applyPayload(r.project.data||{});
+    els.statusText.textContent=`已從雲端開啟：${r.project.projectName||meta.projectName}｜${r.project.version||APP_VERSION}`;
+    closeProjectStorage();
+  }catch(err){
+    showErrorModal('雲端讀取失敗',err,'讀取 Google Drive 專案');
+    els.statusText.textContent='雲端案件讀取失敗';
+  }
 }
 async function deleteProjectCloud(id){
   const meta=cloudProjects.find(x=>x.projectId===id);
